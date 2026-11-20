@@ -92,12 +92,18 @@ O volume mantém os uploads; o banco é o Postgres. Migrações novas entram soz
 | Comando de instalação | `npm ci` |
 | Comando de build | `npm run build` |
 | Comando de start | `npm start` (ou `node .next/standalone/server.js`) |
-| Diretório de saída | `.next` |
+| Diretório de saída | `dist` (o `postbuild` cria; serve para qualquer valor — ver abaixo) |
 | Porta | `3000` (o `server.js` lê `PORT`) |
 | Redirecionar rotas para `index.html` (SPA) | **desligado** |
 
 O redirect SPA quebra o Next: ele já responde suas próprias rotas, e mandar
 tudo para `index.html` derruba as páginas. Deixe desmarcado.
+
+O painel copia o diretório de saída para o runtime e, se ele não existir,
+falha com `cp: can't stat 'dist/.'`. Por isso o `postbuild` grava o pacote
+standalone também em `dist/`, com `start` = `node server.js`. Se o seu painel
+usar outro nome (ex.: `.next`), o `start` precisa ser
+`node .next/standalone/server.js` — nesse caso `dist/` é ignorado.
 
 Não cadastre variável nenhuma: o `.env.production` do repositório já é levado
 para o pacote pelo `postbuild`. Apenas ative um volume persistente montado em

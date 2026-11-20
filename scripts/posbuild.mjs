@@ -60,3 +60,55 @@ if (existsSync(pkgDist)) {
 }
 
 console.log("[postbuild] espelho do pacote em dist/");
+
+/**
+ * Se o painel servir `dist` como site estático (nginx procurando `index.html`
+ * e respondendo 403 quando não há), o usuário não vê nada e não sabe o porquê.
+ * Este index.html é a única coisa que aparece nesse cenário: o app Next em si
+ * é servido pelo `server.js`, que só responde quando o processo Node roda.
+ */
+writeFileSync(
+  path.join(dist, "index.html"),
+  `<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deploy incompleto — JH7 Marketing</title>
+<style>
+  body { margin:0; min-height:100vh; display:grid; place-items:center;
+         font:16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+         background:#0a0a0a; color:#e5e5e5; }
+  main { max-width:44rem; padding:2.5rem; }
+  h1 { font-size:1.5rem; margin:0 0 .5rem; }
+  p { margin:.6rem 0; color:#a3a3a3; }
+  code { background:#171717; border:1px solid #262626; border-radius:6px;
+         padding:.1rem .35rem; font-size:.9em; color:#e5e5e5; }
+  ol { color:#a3a3a3; padding-left:1.2rem; }
+  li { margin:.4rem 0; }
+  .box { margin-top:1.5rem; padding:1rem 1.2rem; border:1px solid #262626;
+         border-radius:10px; background:#111; }
+  strong { color:#e5e5e5; }
+</style>
+<main>
+  <h1>Servidor não iniciado</h1>
+  <p>Os arquivos do sistema chegaram ao servidor, mas o processo Node do Next
+     não está rodando. Por isso esta página é a única resposta disponível.</p>
+  <div class="box">
+    <strong>Para o administrador</strong>
+    <ol>
+      <li>No painel, defina a aplicação como <code>Node.js</code> /
+          <code>Next.js</code> — não como site estático.</li>
+      <li>Diretório de saída: <code>.next</code> (não <code>dist</code>).</li>
+      <li>Comando de start: <code>node server.js</code>, porta
+          <code>3000</code>.</li>
+      <li>Redeploy — isso regenera o roteamento do nginx.</li>
+    </ol>
+    <p>O acesso pelo sistema fica em <code>/login</code> quando o processo
+       Node estiver no ar.</p>
+  </div>
+</main>
+</html>
+`,
+);
+
+console.log("[postbuild] index.html de diagnóstico em dist/");
