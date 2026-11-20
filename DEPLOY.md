@@ -113,6 +113,11 @@ O volume mantém os uploads; o banco é o Postgres. Migrações novas entram soz
 | Diretório de saída | `dist` (o `postbuild` cria; serve para qualquer valor — ver abaixo) |
 | Porta | `3000` (o `server.js` lê `PORT`) |
 | Redirecionar rotas para `index.html` (SPA) | **desligado** |
+| Readiness / smoke test | `http://127.0.0.1:3000/health` (200 = app e banco ok) |
+
+`/health` responde `{"ok":true,"banco":"ok"}` e devolve **503** se o Postgres
+estiver inacessível — assim um deploy "no ar mas sem banco" falha na hora, em
+vez de mostrar tela de erro para o usuário.
 
 O redirect SPA quebra o Next: ele já responde suas próprias rotas, e mandar
 tudo para `index.html` derruba as páginas. Deixe desmarcado.
@@ -122,6 +127,20 @@ falha com `cp: can't stat 'dist/.'`. Por isso o `postbuild` grava o pacote
 standalone também em `dist/`, com `start` = `node server.js`. Se o seu painel
 usar outro nome (ex.: `.next`), o `start` precisa ser
 `node .next/standalone/server.js` — nesse caso `dist/` é ignorado.
+
+### O painel não roda build
+
+Alguns painéis executam apenas `npm ci` e `npm start`, sem etapa de build: o
+log mostra `Instalação de dependências` seguido de `Iniciando aplicação`, e o
+`start` falha com `server.js do standalone não encontrado`.
+
+O `scripts/start.mjs` resolve isso: quando falta `.next/standalone/server.js`,
+ele roda `npm run build` antes de subir. O primeiro start do painel demora o
+tempo do build (~1 min); os seguintes reaproveitam o pacote.
+
+Se preferir um build explícito, use como comandos de pré-execução
+`npm ci && npm run build` — o `start` reconhece o pacote existente e não
+reconstrói.
 
 A versão do Node.js precisa existir no registro do painel. O erro
 `failed to resolve reference "docker.io/icontainer/node:22.23.4": not found`
