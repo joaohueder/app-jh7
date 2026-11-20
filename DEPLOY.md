@@ -104,6 +104,7 @@ O volume mantém os uploads; o banco é o Postgres. Migrações novas entram soz
 
 | Campo | Valor |
 |---|---|
+| Versão do Node.js | `24.2.0` — tem que existir no registro do painel (ver abaixo) |
 | Framework | Next.js (ou Other, se não listar) |
 | Diretório de trabalho / raiz | `.` (a pasta do `package.json`) |
 | Comando de instalação | `npm ci` |
@@ -121,6 +122,13 @@ falha com `cp: can't stat 'dist/.'`. Por isso o `postbuild` grava o pacote
 standalone também em `dist/`, com `start` = `node server.js`. Se o seu painel
 usar outro nome (ex.: `.next`), o `start` precisa ser
 `node .next/standalone/server.js` — nesse caso `dist/` é ignorado.
+
+A versão do Node.js precisa existir no registro do painel. O erro
+`failed to resolve reference "docker.io/icontainer/node:22.23.4": not found`
+significa que a versão escolhida não tem imagem publicada — o app nem chega a
+rodar e o rollback falha pelo mesmo motivo. Tags disponíveis no
+`icontainer/node`: `18.20.4`, `20.18.0`, `20.19.0`, `22.11.0`, `23.1.0`,
+`24.2.0`. Use `24.2.0`: é a que casa com `engines` e não emite aviso de engine.
 
 Não cadastre variável nenhuma: o `.env.production` do repositório já é levado
 para o pacote pelo `postbuild`. Apenas ative um volume persistente montado em
