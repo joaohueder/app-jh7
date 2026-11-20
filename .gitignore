@@ -49,3 +49,6 @@ next-env.d.ts
 
 # pacote gerado por preparar-servidor.bat
 /dist-servidor/
+
+# espelho standalone gerado pelo postbuild (o painel copia daqui)
+/dist/

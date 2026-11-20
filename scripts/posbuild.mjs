@@ -8,7 +8,7 @@
  * Roda via `postbuild` no package.json — inclusive dentro do Dockerfile e do
  * build do painel, então o deploy não precisa copiar nada à mão.
  */
-import { cpSync, existsSync, rmSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const raiz = process.cwd();
@@ -39,3 +39,24 @@ for (const [origem, alvo] of copias) {
 }
 
 console.log("[postbuild] pacote pronto em .next/standalone");
+
+/**
+ * O painel copia o "diretório de saída" (por padrão `dist`) para o runtime e
+ * falha com `cp: can't stat 'dist/.'` se ele não existir. Em vez de exigir que
+ * alguém mude a configuração do painel, publicamos o pacote também ali.
+ * `output: "standalone"` continua sendo a fonte; `dist` é só o espelho.
+ */
+const dist = path.join(raiz, "dist");
+rmSync(dist, { recursive: true, force: true });
+cpSync(destino, dist, { recursive: true });
+
+// Quem roda a partir de `dist` executa `server.js` na mesma pasta, não
+// `.next/standalone/server.js` (esse caminho só vale na raiz do projeto).
+const pkgDist = path.join(dist, "package.json");
+if (existsSync(pkgDist)) {
+  const pkg = JSON.parse(readFileSync(pkgDist, "utf8"));
+  pkg.scripts = { ...pkg.scripts, start: "node server.js" };
+  writeFileSync(pkgDist, `${JSON.stringify(pkg, null, 2)}\n`);
+}
+
+console.log("[postbuild] espelho do pacote em dist/");

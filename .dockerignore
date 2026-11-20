@@ -4,6 +4,7 @@ node_modules
 .gitignore
 data
 dist-servidor
+dist
 *.log
 .env
 .env.local
