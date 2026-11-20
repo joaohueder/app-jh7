@@ -1,0 +1,54 @@
+
+> jh7-sistema@0.1.0 build
+> next build
+
+▲ Next.js 16.4.6 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.ts took 62ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 2.7s
+  Running TypeScript ...
+  Finished TypeScript in 6.0s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/7) ...
+  Generating static pages using 11 workers (1/7) 
+  Generating static pages using 11 workers (3/7) 
+  Generating static pages using 11 workers (5/7) 
+✓ Generating static pages using 11 workers (7/7) in 319ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ○ /_not-found
+├ ƒ /api/brand/logo
+├ ƒ /campanhas
+├ ƒ /campanhas/[clientId]
+├ ƒ /campanhas/[clientId]/[campaignId]
+├ ƒ /campanhas/[clientId]/[campaignId]/[adsetId]
+├ ƒ /clientes
+├ ƒ /clientes/[id]
+├ ƒ /clientes/novo
+├ ƒ /configuracoes
+├ ƒ /financeiro
+├ ƒ /login
+├ ƒ /painel
+├ ƒ /r/[token]
+├ ƒ /relatorios
+├ ƒ /relatorios/[clientId]
+└ ƒ /usuarios
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+
+> jh7-sistema@0.1.0 postbuild
+> node scripts/posbuild.mjs
+
+[postbuild] public -> .next\standalone\public
+[postbuild] .next\static -> .next\standalone\.next\static
+[postbuild] drizzle -> .next\standalone\drizzle
+[postbuild] pacote pronto em .next/standalone

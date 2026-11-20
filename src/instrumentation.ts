@@ -10,4 +10,10 @@ export async function register() {
 
   const { garantirMigracoes } = await import("./lib/db/migrate");
   garantirMigracoes();
+
+  const { garantirAdministrador, garantirConfiguracoes } = await import(
+    "./lib/db/bootstrap"
+  );
+  garantirConfiguracoes();
+  await garantirAdministrador();
 }

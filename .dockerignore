@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.gitignore
+data
+dist-servidor
+*.log
+.env
+.env.local
+.env.*.local
+README.md
+AGENTS.md
+build.log
+iniciar-servidor.bat
+preparar-servidor.bat

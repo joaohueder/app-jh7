@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# JH7 Marketing — sistema interno
 
-## Getting Started
+Next.js 16 (App Router), SQLite via Drizzle, login com sessão assinada.
 
-First, run the development server:
+## Desenvolvimento
 
 ```bash
+npm install
+cp .env.example .env.local   # preencha SESSION_SECRET e ADMIN_*
+npm run db:migrate
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Produção
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Ver [DEPLOY.md](DEPLOY.md): build standalone, Docker, campos do painel de
+hospedagem e disco persistente.
 
-## Learn More
+Resumo: `npm run build` gera `.next/standalone`; o servidor roda com
+`node .next/standalone/server.js` e lê `PORT`, `DATA_DIR` e `SESSION_SECRET`
+do ambiente. Migrações e o primeiro administrador são criados na subida.
 
-To learn more about Next.js, take a look at the following resources:
+## Banco
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+SQLite em `DATA_DIR` (padrão `./data`). Schema em `src/lib/db/schema.ts`,
+migrações em `drizzle/`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run db:generate   # após editar o schema
+npm run db:migrate    # aplica pendentes (o app também aplica ao subir)
+npm run db:studio
+```

@@ -2,11 +2,15 @@
   "name": "jh7-sistema",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "dev:lan": "next dev -H 0.0.0.0",
     "build": "next build",
-    "start": "next start -H 0.0.0.0",
+    "postbuild": "node scripts/posbuild.mjs",
+    "start": "node .next/standalone/server.js",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
