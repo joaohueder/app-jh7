@@ -4,13 +4,17 @@
 # Não há dependência nativa no projeto (o better-sqlite3 saiu junto com o
 # SQLite), então o build é o mesmo em qualquer arquitetura. Ainda assim, compile
 # em Linux/x64 no painel para casar com a imagem final.
+#
+# Versão fixa e igual à de `engines` no package.json: 24.2.0 é a única LTS
+# recente disponível no registro do painel (icontainer/node) sem aviso de
+# engine nas dependências.
 
-FROM node:22-alpine AS deps
+FROM node:24.2.0-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-FROM node:22-alpine AS builder
+FROM node:24.2.0-alpine AS builder
 WORKDIR /app
 # drizzle-kit/tsx são devDependencies: o build precisa delas, o runtime não.
 COPY --from=deps /app/node_modules ./node_modules
@@ -18,7 +22,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-FROM node:22-alpine AS runner
+FROM node:24.2.0-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
