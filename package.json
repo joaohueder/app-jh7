@@ -18,7 +18,8 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
     "db:migrar-sqlite": "tsx scripts/migrar-sqlite-para-pg.ts",
-    "db:check": "tsx scripts/check-financeiro.ts"
+    "db:check": "tsx scripts/check-financeiro.ts",
+    "postinstall": "node scripts/postinstall.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

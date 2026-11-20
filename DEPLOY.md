@@ -128,19 +128,24 @@ standalone também em `dist/`, com `start` = `node server.js`. Se o seu painel
 usar outro nome (ex.: `.next`), o `start` precisa ser
 `node .next/standalone/server.js` — nesse caso `dist/` é ignorado.
 
-### O painel não roda build
+### O painel não roda build (build acontece no `npm ci`)
 
-Alguns painéis executam apenas `npm ci` e `npm start`, sem etapa de build: o
-log mostra `Instalação de dependências` seguido de `Iniciando aplicação`, e o
-`start` falha com `server.js do standalone não encontrado`.
+Alguns painéis executam apenas `npm ci` e `npm start`, sem etapa de build, e
+ainda disparam o smoke test poucos segundos depois de iniciar o app. Compilar
+no `start` não serve: o build leva 1–3 min em container frio e o smoke test
+encontra a porta fechada, aplicando rollback.
 
-O `scripts/start.mjs` resolve isso: quando falta `.next/standalone/server.js`,
-ele roda `npm run build` antes de subir. O primeiro start do painel demora o
-tempo do build (~1 min); os seguintes reaproveitam o pacote.
+Por isso o build roda no **`postinstall`** (`scripts/postinstall.mjs`): quando
+o `npm ci` termina, o pacote standalone já existe e o `start` sobe em segundos.
+Guardas do script:
 
-Se preferir um build explícito, use como comandos de pré-execução
-`npm ci && npm run build` — o `start` reconhece o pacote existente e não
-reconstrói.
+- sem `src/` (estágio `deps` do Dockerfile) → não compila;
+- pacote já existente → não recompila (reinstalação local é instantânea);
+- `SKIP_BUILD=1` → desliga.
+
+O `scripts/start.mjs`, por segurança, ainda constrói se o pacote faltar — mas
+nesse caso o smoke test do painel pode falhar pelo tempo de build. O caminho
+confiável é o `postinstall`.
 
 A versão do Node.js precisa existir no registro do painel. O erro
 `failed to resolve reference "docker.io/icontainer/node:22.23.4": not found`

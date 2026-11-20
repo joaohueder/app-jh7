@@ -12,7 +12,9 @@
 FROM node:24.2.0-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# --ignore-scripts: este estágio só tem package.json (sem scripts/ nem src/),
+# então o postinstall não existe aqui. Não há dependência nativa para compilar.
+RUN npm ci --ignore-scripts
 
 FROM node:24.2.0-alpine AS builder
 WORKDIR /app
@@ -20,6 +22,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# SKIP_BUILD: o postinstall já compila caso o script não tenha sido pulado;
+# aqui o build é explícito para o erro aparecer com contexto.
+ENV SKIP_BUILD=1
 RUN npm run build
 
 FROM node:24.2.0-alpine AS runner
