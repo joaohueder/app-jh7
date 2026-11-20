@@ -8,8 +8,13 @@ import * as schema from "./schema";
  *
  * `DATABASE_URL` é a fonte do endereço (formato
  * postgres://usuario:senha@host:porta/banco). Sem ela, aponta para o Postgres
- * local do docker-compose. O pool fica em globalThis para o hot-reload do
- * `next dev` não abrir uma conexão nova a cada alteração.
+ * local do docker-compose.
+ *
+ * A escolha entre IP público e hostname interno do provedor acontece **antes**
+ * de o servidor carregar (ver `scripts/start.mjs`): aquele módulo testa o
+ * endereço e reescreve `DATABASE_URL` com o que respondeu. Aqui só se lê o
+ * resultado — diferente de tentar trocar o pool em tempo de execução, o que o
+ * Drizzle não suporta (a instância guarda a referência original).
  */
 export const DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -26,9 +31,9 @@ function createDb(): DbInstance {
   const pool = new Pool({
     connectionString: DATABASE_URL,
     max: 10,
-    // Sem isto, uma porta bloqueada por firewall deixa a requisição pendurada
-    // até o timeout do TCP (~2 min) e o deploy parece "subiu mas não responde".
-    connectionTimeoutMillis: 15_000,
+    // Porta bloqueada por firewall pendura o TCP por ~2min e o app parece
+    // "no ar mas sem responder". 8s basta para um banco na mesma região.
+    connectionTimeoutMillis: 8_000,
   });
   globalForDb.__jh7Pool = pool;
 
@@ -48,6 +53,15 @@ export const pool = globalForDb.__jh7Pool!;
 
 if (process.env.NODE_ENV !== "production") {
   globalForDb.__jh7Db = db;
+}
+
+/** Host do banco em uso, sem credenciais — usado pelo `/health`. */
+export function hostDoBanco(): string {
+  try {
+    return new URL(DATABASE_URL).host;
+  } catch {
+    return "(DATABASE_URL inválida)";
+  }
 }
 
 export { schema };

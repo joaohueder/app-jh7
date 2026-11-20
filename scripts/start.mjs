@@ -15,6 +15,7 @@
  */
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -24,6 +25,53 @@ process.env.NODE_ENV ??= "production";
 // Mesma regra do Dockerfile e do painel: escutar em todas as interfaces.
 process.env.HOSTNAME = "0.0.0.0";
 process.env.PORT ??= "3000";
+
+/**
+ * Escolhe o endereço do banco antes de o Next carregar.
+ *
+ * O mesmo Postgres costuma ter dois endereços: um IP público (sujeito a
+ * allowlist do provedor) e um hostname interno (só resolve de dentro dele).
+ * Onde o IP não estiver liberado, o app morre na migração no boot.
+ *
+ * `DATABASE_URL_FALLBACK` é tentado quando o principal não abre a porta em 5s.
+ * A escolha precisa ocorrer aqui: depois de carregado, o Drizzle já guardou a
+ * referência do pool e trocar em execução não tem efeito.
+ */
+async function testarPorta(url) {
+  let alvo;
+  try {
+    alvo = new URL(url);
+  } catch {
+    return false;
+  }
+  return new Promise((resolver) => {
+    const socket = net.connect({
+      host: alvo.hostname,
+      port: Number(alvo.port || 5432),
+      timeout: 5_000,
+    });
+    socket.once("connect", () => {
+      socket.destroy();
+      resolver(true);
+    });
+    socket.once("timeout", () => {
+      socket.destroy();
+      resolver(false);
+    });
+    socket.once("error", () => {
+      socket.destroy();
+      resolver(false);
+    });
+  });
+}
+
+const principal = process.env.DATABASE_URL;
+const alternativo = process.env.DATABASE_URL_FALLBACK;
+
+if (principal && alternativo && !(await testarPorta(principal))) {
+  console.warn(`[start] banco principal inacessível; usando o alternativo`);
+  process.env.DATABASE_URL = alternativo;
+}
 
 const pacote = path.join(raiz, ".next", "standalone", "server.js");
 const local = path.join(raiz, "server.js");

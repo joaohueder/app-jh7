@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-import { DATABASE_URL, db } from "@/lib/db";
+import { db, hostDoBanco } from "@/lib/db";
 
 /**
  * Healthcheck para o painel (readiness e smoke test pós-deploy).
@@ -25,13 +25,7 @@ export async function GET() {
   } catch (erro) {
     // A mensagem do driver vem sem detalhe útil ("Failed query: select 1").
     // O host do banco é o que resolve o problema na prática, então vai no corpo.
-    const host = (() => {
-      try {
-        return new URL(DATABASE_URL).host;
-      } catch {
-        return "(DATABASE_URL inválida)";
-      }
-    })();
+    const host = hostDoBanco();
     const causa = (erro as { cause?: { message?: string } })?.cause?.message;
     console.error(`[health] banco inacessível em ${host}:`, causa ?? erro);
 
