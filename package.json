@@ -51,7 +51,6 @@
     "eslint-config-next": "16.4.6",
     "tailwindcss": "4.3.3",
     "tsx": "^4.23.15",
-    "typescript": "^5",
-    "better-sqlite3": "^13.2.0"
+    "typescript": "^5"
   }
 }

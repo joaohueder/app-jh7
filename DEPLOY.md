@@ -52,12 +52,18 @@ O `data/jh7.db` continua no projeto como fonte. Rode uma vez, com o Postgres
 vazio:
 
 ```powershell
+npm i --no-save better-sqlite3
 $env:DATABASE_URL="postgres://usuario:senha@HOST:5432/banco"
 npm run db:migrar-sqlite
 ```
 
+O `better-sqlite3` é instalado só nesta execução. Ele **não** fica nas
+dependências do projeto: é um módulo nativo que compila com node-gyp e faz o
+`npm ci` falhar em imagens sem Python (Python é o build do deploy).
+
 O script aplica as migrações Postgres, copia as tabelas preservando os ids e
-avança as sequences. É idempotente (limpa o destino antes).
+avança as sequences. É idempotente (limpa o destino antes). Depois da cópia, o
+`data/jh7.db` pode ser apagado.
 
 ## Opção 1 — Docker (recomendado)
 

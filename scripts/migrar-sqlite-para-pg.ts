@@ -1,7 +1,9 @@
 /**
  * Copia os dados do SQLite local (`data/jh7.db`) para o Postgres.
  *
- * Uso:
+ * Uso (one-shot; o better-sqlite3 NÃO é dependência do projeto — ele compila
+ * com node-gyp e quebra o `npm ci` em imagem sem Python):
+ *   npm i --no-save better-sqlite3
  *   DATABASE_URL=postgres://... npx tsx scripts/migrar-sqlite-para-pg.ts
  *
  * Preserva os ids (o app referencia cliente/contrato por número) e no fim

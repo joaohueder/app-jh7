@@ -33,7 +33,7 @@ Postgres. Schema em `src/lib/db/schema.ts`, migrações em `drizzle/`.
 ```bash
 npm run db:generate      # após editar o schema
 npm run db:migrate       # aplica pendentes (o app também aplica ao subir)
-npm run db:migrar-sqlite # copia data/jh7.db (SQLite antigo) para o Postgres
+npm run db:migrar-sqlite # copia data/jh7.db (exige: npm i --no-save better-sqlite3)
 npm run db:check         # auto-teste do Financeiro (banco descartável)
 npm run db:studio
 ```
