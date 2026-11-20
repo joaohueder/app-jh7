@@ -18,37 +18,45 @@ import { db } from "./index";
  */
 const PASTA = process.env.MIGRATIONS_DIR ?? path.join(process.cwd(), "drizzle");
 
-let aplicando: Promise<void> | null = null;
+let aplicando: Promise<boolean> | null = null;
 
-export async function garantirMigracoes(): Promise<void> {
-  if (aplicando) return aplicando;
-  aplicando = rodar();
+/**
+ * Nunca lança: um banco fora do ar **não pode impedir o servidor de subir**.
+ *
+ * Antes esta função propagava o erro. Chamada do `instrumentation.ts`, isso
+ * fazia o Next abortar a preparação e responder **500 em toda rota** — inclusive
+ * `/health`, que existe justamente para diagnosticar. Agora a falha fica
+ * registrada e é o `/health` (503) e as telas que reportam o problema.
+ */
+export async function garantirMigracoes(): Promise<boolean> {
+  if (!aplicando) aplicando = rodar();
   return aplicando;
 }
 
-async function rodar(): Promise<void> {
+async function rodar(): Promise<boolean> {
   // Sem a pasta (ex.: dev sem migrações geradas), não derruba o servidor.
   if (!existsSync(path.join(PASTA, "meta", "_journal.json"))) {
     console.warn(`[db] pasta de migrações não encontrada em ${PASTA}`);
-    return;
+    return false;
   }
 
   try {
     await migrate(db, { migrationsFolder: PASTA });
     console.log("[db] migrações em dia");
+    return true;
   } catch (erro) {
-    // Falhar aqui é melhor do que subir servindo dados inconsistentes, mas o
-    // log precisa dizer o que fazer — o processo morre no primeiro request.
-    // Em container, erro de conexão aqui é o que deixa o log vazio e o proxy
-    // respondendo 502: o motivo real precisa aparecer.
     const codigo = (erro as { code?: string }).code ?? "";
     console.error("[db] falha ao aplicar migrações:", erro);
-    if (["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN"].includes(codigo)) {
+    if (
+      ["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN"].includes(codigo) ||
+      /timeout|terminated/i.test(String((erro as Error)?.message))
+    ) {
       console.error(
         "[db] não foi possível conectar no Postgres em DATABASE_URL. " +
-          "Confira host/porta e se a allowlist do banco aceita o IP do servidor.",
+          "Confira host/porta e se a allowlist do banco aceita o IP do servidor. " +
+          "O servidor segue no ar; /health reporta o estado do banco.",
       );
     }
-    throw erro;
+    return false;
   }
 }

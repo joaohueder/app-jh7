@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-import { db } from "@/lib/db";
+import { DATABASE_URL, db } from "@/lib/db";
 
 /**
  * Healthcheck para o painel (readiness e smoke test pós-deploy).
@@ -23,11 +23,25 @@ export async function GET() {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (erro) {
+    // A mensagem do driver vem sem detalhe útil ("Failed query: select 1").
+    // O host do banco é o que resolve o problema na prática, então vai no corpo.
+    const host = (() => {
+      try {
+        return new URL(DATABASE_URL).host;
+      } catch {
+        return "(DATABASE_URL inválida)";
+      }
+    })();
+    const causa = (erro as { cause?: { message?: string } })?.cause?.message;
+    console.error(`[health] banco inacessível em ${host}:`, causa ?? erro);
+
     return NextResponse.json(
       {
         ok: false,
         banco: "inacessivel",
-        erro: erro instanceof Error ? erro.message : String(erro),
+        host,
+        erro: causa ?? "falha ao consultar o banco",
+        dica: "Confira se o host responde e se a allowlist do banco aceita o IP deste servidor.",
       },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );

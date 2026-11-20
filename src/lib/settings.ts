@@ -55,10 +55,16 @@ function logoEnviado(): string | null {
 }
 
 export async function getSettings(): Promise<AppSettings> {
+  // O layout raiz chama isto em toda página. Com o banco fora, o certo é a tela
+  // de login abrir com o nome padrão — não um 500 na aplicação inteira.
   const rows = await db
     .select()
     .from(settings)
     .where(inArray(settings.key, [SETTING_KEYS.systemName]))
+    .catch((erro: unknown) => {
+      console.error("[db] getSettings sem banco:", (erro as Error)?.message);
+      return [];
+    });
 
   const nome = rows.find((row) => row.key === SETTING_KEYS.systemName)?.value?.trim();
   const enviado = logoEnviado();
