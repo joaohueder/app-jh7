@@ -23,8 +23,9 @@ Ver [DEPLOY.md](DEPLOY.md): build standalone, Docker, campos do painel de
 hospedagem, Postgres remoto e migração dos dados do SQLite antigo.
 
 Resumo: `npm run build` gera `.next/standalone`; o servidor roda com
-`node .next/standalone/server.js` e lê `PORT`, `DATABASE_URL`, `DATA_DIR` e
-`SESSION_SECRET` do ambiente.
+`node .next/standalone/server.js`. As credenciais vêm do `.env.production`
+versionado (repositório privado), copiado para o pacote pelo `postbuild` —
+o deploy não depende de variáveis cadastradas no painel.
 
 ## Banco
 

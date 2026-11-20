@@ -8,23 +8,26 @@ Banco: **Postgres** (via `pg`). Só os uploads precisam de disco.
 
 ## Variáveis de ambiente
 
-| Variável | Obrigatória | Uso |
+**Nada precisa ser cadastrado no painel.** O `.env.production` versionado no
+repositório traz `DATABASE_URL`, `SESSION_SECRET` e o admin do primeiro boot; o
+`postbuild` copia esse arquivo para dentro de `.next/standalone`, que é de onde
+o servidor lê. Como o repositório é **privado**, isso é aceitável — se ele
+voltar a ser público, troque a senha do banco e o `SESSION_SECRET` antes.
+
+| Variável | Onde vem | Uso |
 |---|---|---|
-| `DATABASE_URL` | sim | `postgres://usuario:senha@host:porta/banco`. |
-| `SESSION_SECRET` | sim | Assina o cookie de sessão. 32+ caracteres aleatórios. |
-| `DATA_DIR` | sim em produção | Pasta dos uploads (logo). Dockerfile usa `/data`. |
-| `ADMIN_NAME` | não | Nome do admin criado no primeiro boot. |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | sim | Admin criado no primeiro boot. |
-| `PORT` / `HOSTNAME` | não | Padrão `3000` / `0.0.0.0`. |
+| `DATABASE_URL` | `.env.production` | `postgres://usuario:senha@host:porta/banco`. |
+| `SESSION_SECRET` | `.env.production` | Assina o cookie de sessão. |
+| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | `.env.production` | Admin do primeiro boot. |
+| `DATA_DIR` | Dockerfile (`/data`) | Pasta dos uploads (logo). |
+| `PORT` / `HOSTNAME` | Dockerfile | Padrão `3000` / `0.0.0.0`. |
+
+Variável cadastrada no painel ou passada por `-e` **tem prioridade** sobre o
+arquivo — útil para sobrescrever sem editar o repositório.
 
 Na primeira subida o servidor aplica as migrações pendentes (`drizzle/`) e, se
 a tabela de usuários estiver vazia, cria o administrador. Com usuário já
 cadastrado, `ADMIN_PASSWORD` é ignorado — troque a senha pelo sistema.
-
-Gere o segredo:
-
-```powershell
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
 ## O Postgres precisa aceitar conexão de fora
@@ -69,15 +72,11 @@ avança as sequences. É idempotente (limpa o destino antes). Depois da cópia, 
 
 ```powershell
 docker build -t jh7 .
-docker run -d --name jh7 -p 3000:3000 `
-  -v jh7-uploads:/data `
-  -e DATABASE_URL="postgres://usuario:senha@HOST:5432/banco" `
-  -e SESSION_SECRET="cole-o-segredo" `
-  -e ADMIN_NAME="João Hueder" `
-  -e ADMIN_EMAIL="email@dominio.com" `
-  -e ADMIN_PASSWORD="senha-forte" `
-  jh7
+docker run -d --name jh7 -p 3000:3000 -v jh7-uploads:/data jh7
 ```
+
+Sem `-e`: as variáveis vêm do `.env.production` que viajou dentro do pacote.
+Para sobrescrever algo pontual, acrescente `-e NOME=valor`.
 
 Abra http://localhost:3000.
 
@@ -100,17 +99,21 @@ O volume mantém os uploads; o banco é o Postgres. Migrações novas entram soz
 O redirect SPA quebra o Next: ele já responde suas próprias rotas, e mandar
 tudo para `index.html` derruba as páginas. Deixe desmarcado.
 
-Cadastre `DATABASE_URL`, `SESSION_SECRET` e `DATA_DIR=/data` nas variáveis do
-app. Ative um volume persistente montado em `/data` para os uploads.
+Não cadastre variável nenhuma: o `.env.production` do repositório já é levado
+para o pacote pelo `postbuild`. Apenas ative um volume persistente montado em
+`/data` para os uploads.
 
 ## Opção 3 — Servidor Linux com Node instalado
 
 ```bash
 npm ci
 npm run build
-DATABASE_URL=postgres://... DATA_DIR=/var/lib/jh7 PORT=3000 HOSTNAME=0.0.0.0 \
-  SESSION_SECRET=... node .next/standalone/server.js
+DATA_DIR=/var/lib/jh7 PORT=3000 HOSTNAME=0.0.0.0 node .next/standalone/server.js
 ```
+
+O `DATABASE_URL` e o `SESSION_SECRET` vêm do `.env.production` copiado para
+`.next/standalone`. Só `DATA_DIR` precisa ser apontado aqui porque o padrão
+`/data` do Dockerfile não existe fora de container.
 
 Mantenha com systemd ou pm2 e ponha nginx com HTTPS na frente.
 
