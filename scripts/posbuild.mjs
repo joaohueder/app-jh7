@@ -35,16 +35,21 @@ const serverOriginal = path.join(destino, "server.js");
 const serverCopia = path.join(destino, "server.next.js");
 if (existsSync(serverOriginal) && !existsSync(serverCopia)) {
   cpSync(serverOriginal, serverCopia);
+  // `server.js` passa a ser o launcher: abre a porta externa na hora (responde
+  // 503 enquanto sobe) e delega ao Next. Vale para qualquer comando que o
+  // painel use — `node server.js`, `npm start` ou `node start.mjs`.
   writeFileSync(
     serverOriginal,
-    `// Gerado pelo postbuild: força HOSTNAME=0.0.0.0 antes de carregar o
-// servidor do Next. Ver scripts/posbuild.mjs para o motivo.
-process.env.HOSTNAME = "0.0.0.0";
-process.env.PORT ??= "3000";
-require("./server.next.js");
+    `// Gerado pelo postbuild. Ver scripts/start.mjs: sobe o proxy que abre a
+// porta imediatamente e força HOSTNAME=0.0.0.0 (o HOSTNAME do Docker é o ID
+// do container e impedia o proxy de alcançar o servidor).
+import("./start.mjs").catch((erro) => {
+  console.error("[server] falha ao iniciar:", erro);
+  process.exit(1);
+});
 `,
   );
-  console.log("[postbuild] server.js com HOSTNAME forçado em 0.0.0.0");
+  console.log("[postbuild] server.js delega ao start.mjs (proxy na porta)");
 }
 
 // Dados de desenvolvimento não podem ir para o pacote de produção.

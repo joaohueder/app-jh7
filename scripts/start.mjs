@@ -154,15 +154,29 @@ function construir() {
   });
 }
 
-if (!existsSync(pacote) && !existsSync(local)) {
+/**
+ * Servidor do Next, já sem o launcher.
+ *
+ * No pacote standalone o `server.js` é substituído pelo postbuild e delega a
+ * este mesmo arquivo — apontar o filho para ele geraria loop infinito. O Next
+ * original fica em `server.next.js`; o `start.mjs` do repositório é a cópia.
+ */
+const servidores = [
+  path.join(raiz, ".next", "standalone", "server.next.js"),
+  path.join(raiz, "server.next.js"),
+  pacote,
+  local,
+];
+
+if (!servidores.some((arquivo) => existsSync(arquivo))) {
   const montou = await construir();
   if (!montou) process.exit(1);
 }
 
-const alvo = [pacote, local].find((arquivo) => existsSync(arquivo));
+const alvo = servidores.find((arquivo) => existsSync(arquivo));
 if (!alvo) {
   console.error(
-    "[start] build terminou mas .next/standalone/server.js não foi gerado. " +
+    "[start] build terminou mas o servidor do Next não foi gerado. " +
       'Confira se next.config.ts tem `output: "standalone"`.',
   );
   process.exit(1);
