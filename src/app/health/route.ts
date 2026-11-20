@@ -22,7 +22,7 @@ export async function GET() {
   // vivo — `BUILD_ID` muda a cada `next build`.
   const build = {
     buildId: process.env.BUILD_ID ?? "desconhecido",
-    versao: process.env.npm_package_version ?? "?",
+    versao: process.env.APP_VERSION ?? "?",
   };
 
   try {
