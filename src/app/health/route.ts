@@ -16,10 +16,19 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const inicio = Date.now();
+  // Identifica o build em produção. O painel já serviu código antigo depois de
+  // um deploy (build não refeito), e o sintoma era um erro que só existia na
+  // versão anterior. Com o selo dá para saber, sem adivinhação, qual build está
+  // vivo — `BUILD_ID` muda a cada `next build`.
+  const build = {
+    buildId: process.env.BUILD_ID ?? "desconhecido",
+    versao: process.env.npm_package_version ?? "?",
+  };
+
   try {
     await db.execute(sql`select 1`);
     return NextResponse.json(
-      { ok: true, banco: "ok", ms: Date.now() - inicio },
+      { ok: true, banco: "ok", ms: Date.now() - inicio, ...build },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (erro) {

@@ -101,7 +101,7 @@ function testarPorta(url) {
     const socket = net.connect({
       host: alvo.hostname,
       port: Number(alvo.port || 5432),
-      timeout: 5_000,
+      timeout: 2_500,
     });
     socket.once("connect", () => {
       socket.destroy();
