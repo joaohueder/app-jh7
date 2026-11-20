@@ -27,6 +27,9 @@ const copias = [
   [path.join(raiz, "public"), path.join(destino, "public")],
   [path.join(raiz, ".next", "static"), path.join(destino, ".next", "static")],
   [path.join(raiz, "drizzle"), path.join(destino, "drizzle")],
+  // Configuração de produção versionada: o deploy não depende de variáveis
+  // cadastradas no painel. Sem ela os valores ficam por conta do ambiente.
+  [path.join(raiz, ".env.production"), path.join(destino, ".env.production")],
 ];
 
 for (const [origem, alvo] of copias) {

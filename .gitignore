@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+# Produção: versionado de propósito (repo privado) para o deploy rodar sem
+# variáveis no painel. Ver o aviso no topo do arquivo.
+!.env.production
 
 # vercel
 .vercel
