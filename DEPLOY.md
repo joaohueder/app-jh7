@@ -20,7 +20,8 @@ voltar a ser público, troque a senha do banco e o `SESSION_SECRET` antes.
 | `SESSION_SECRET` | `.env.production` | Assina o cookie de sessão. |
 | `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | `.env.production` | Admin do primeiro boot. |
 | `DATA_DIR` | Dockerfile (`/data`) | Pasta dos uploads (logo). |
-| `PORT` / `HOSTNAME` | Dockerfile | Padrão `3000` / `0.0.0.0`. |
+| `PORT` | Dockerfile | Padrão `3000`. |
+| `HOSTNAME` | forçado pelo `postbuild`/`start.mjs` | Sempre `0.0.0.0` — ver abaixo. |
 
 Variável cadastrada no painel ou passada por `-e` **tem prioridade** sobre o
 arquivo — útil para sobrescrever sem editar o repositório.
@@ -28,6 +29,22 @@ arquivo — útil para sobrescrever sem editar o repositório.
 Na primeira subida o servidor aplica as migrações pendentes (`drizzle/`) e, se
 a tabela de usuários estiver vazia, cria o administrador. Com usuário já
 cadastrado, `ADMIN_PASSWORD` é ignorado — troque a senha pelo sistema.
+
+### HOSTNAME (causa de 502 sem log)
+
+Docker define `HOSTNAME` com o **ID do container**. O `server.js` do Next faz
+`process.env.HOSTNAME || '0.0.0.0'` e, com essa variável preenchida, tenta
+escutar em `abef49bc2b8f:3000`: nada responde em `127.0.0.1`, o proxy devolve
+**502 Bad Gateway** e o log fica vazio, porque a falha acontece antes do logger.
+
+O `postbuild` substitui o `server.js` por um launcher que força
+`HOSTNAME=0.0.0.0` (o original fica em `server.next.js`), e o `npm start` usa
+`scripts/start.mjs`, que faz o mesmo. Qualquer um dos três comandos funciona:
+
+```bash
+npm start
+node server.js
+node start.mjs
 ```
 
 ## O Postgres precisa aceitar conexão de fora

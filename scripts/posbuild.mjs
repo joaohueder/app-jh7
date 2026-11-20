@@ -19,6 +19,34 @@ if (!existsSync(destino)) {
   process.exit(1);
 }
 
+/**
+ * Substitui o `server.js` gerado pelo Next por um launcher que força
+ * HOSTNAME=0.0.0.0.
+ *
+ * O original faz `process.env.HOSTNAME || '0.0.0.0'`. Em Docker o HOSTNAME já
+ * vem preenchido com o ID do container, então o servidor tenta escutar em
+ * `abef49bc2b8f:3000`, ninguém alcança em 127.0.0.1 e o proxy responde 502 —
+ * sem uma linha de log, porque a falha é antes de o logger subir.
+ *
+ * O Next original fica como `server.next.js`, caso se queira voltar ao
+ * comportamento padrão.
+ */
+const serverOriginal = path.join(destino, "server.js");
+const serverCopia = path.join(destino, "server.next.js");
+if (existsSync(serverOriginal) && !existsSync(serverCopia)) {
+  cpSync(serverOriginal, serverCopia);
+  writeFileSync(
+    serverOriginal,
+    `// Gerado pelo postbuild: força HOSTNAME=0.0.0.0 antes de carregar o
+// servidor do Next. Ver scripts/posbuild.mjs para o motivo.
+process.env.HOSTNAME = "0.0.0.0";
+process.env.PORT ??= "3000";
+require("./server.next.js");
+`,
+  );
+  console.log("[postbuild] server.js com HOSTNAME forçado em 0.0.0.0");
+}
+
 // Dados de desenvolvimento não podem ir para o pacote de produção.
 const dados = path.join(destino, "data");
 if (existsSync(dados)) rmSync(dados, { recursive: true, force: true });
@@ -50,12 +78,17 @@ const dist = path.join(raiz, "dist");
 rmSync(dist, { recursive: true, force: true });
 cpSync(destino, dist, { recursive: true });
 
-// Quem roda a partir de `dist` executa `server.js` na mesma pasta, não
-// `.next/standalone/server.js` (esse caminho só vale na raiz do projeto).
+// O mesmo launcher vai para o espelho: rodando de dentro de `dist`, ele
+// resolve o `server.js` local e força HOSTNAME=0.0.0.0 (o HOSTNAME do Docker é
+// o ID do container e derrubava o servidor com EAI_AGAIN).
 const pkgDist = path.join(dist, "package.json");
+writeFileSync(
+  path.join(dist, "start.mjs"),
+  readFileSync(path.join(raiz, "scripts", "start.mjs"), "utf8"),
+);
 if (existsSync(pkgDist)) {
   const pkg = JSON.parse(readFileSync(pkgDist, "utf8"));
-  pkg.scripts = { ...pkg.scripts, start: "node server.js" };
+  pkg.scripts = { ...pkg.scripts, start: "node start.mjs" };
   writeFileSync(pkgDist, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 

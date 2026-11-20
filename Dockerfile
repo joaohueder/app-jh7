@@ -1,23 +1,18 @@
 # Build em dois estágios: compila no primeiro e leva para a imagem final só o
 # pacote standalone (server.js + node_modules rastreados).
 #
-# better-sqlite3 é binário nativo: o build PRECISA rodar na mesma arquitetura da
-# imagem final (aqui, linux/musl x64). Nunca publique o .next compilado no
-# Windows — ele não sobe no container.
+# Não há dependência nativa no projeto (o better-sqlite3 saiu junto com o
+# SQLite), então o build é o mesmo em qualquer arquitetura. Ainda assim, compile
+# em Linux/x64 no painel para casar com a imagem final.
 
 FROM node:22-alpine AS deps
 WORKDIR /app
-# better-sqlite3 tem prebuild para musl; libc6-compat evita falha de dlopen.
-RUN apk add --no-cache libc6-compat
 COPY package.json package-lock.json ./
-# --ignore-scripts: better-sqlite3 já traz o binário linuxmusl-x64 no pacote.
-# Sem isso o npm tenta compilar com node-gyp e a imagem não tem Python.
-RUN npm ci --ignore-scripts
+RUN npm ci
 
 FROM node:22-alpine AS builder
 WORKDIR /app
 # drizzle-kit/tsx são devDependencies: o build precisa delas, o runtime não.
-RUN apk add --no-cache libc6-compat
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1

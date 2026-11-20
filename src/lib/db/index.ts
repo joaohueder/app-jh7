@@ -23,8 +23,21 @@ const globalForDb = globalThis as unknown as {
 };
 
 function createDb(): DbInstance {
-  const pool = new Pool({ connectionString: DATABASE_URL, max: 10 });
+  const pool = new Pool({
+    connectionString: DATABASE_URL,
+    max: 10,
+    // Sem isto, uma porta bloqueada por firewall deixa a requisição pendurada
+    // até o timeout do TCP (~2 min) e o deploy parece "subiu mas não responde".
+    connectionTimeoutMillis: 15_000,
+  });
   globalForDb.__jh7Pool = pool;
+
+  // Erro de pool sem handler derruba o processo Node inteiro e o proxy passa a
+  // responder 502 sem log. Logar aqui mantém o motivo visível.
+  pool.on("error", (erro) => {
+    console.error("[db] erro no pool de conexões:", erro.message);
+  });
+
   return drizzle(pool, { schema });
 }
 

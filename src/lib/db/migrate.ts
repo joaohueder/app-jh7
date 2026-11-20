@@ -35,10 +35,20 @@ async function rodar(): Promise<void> {
 
   try {
     await migrate(db, { migrationsFolder: PASTA });
+    console.log("[db] migrações em dia");
   } catch (erro) {
     // Falhar aqui é melhor do que subir servindo dados inconsistentes, mas o
     // log precisa dizer o que fazer — o processo morre no primeiro request.
+    // Em container, erro de conexão aqui é o que deixa o log vazio e o proxy
+    // respondendo 502: o motivo real precisa aparecer.
+    const codigo = (erro as { code?: string }).code ?? "";
     console.error("[db] falha ao aplicar migrações:", erro);
+    if (["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN"].includes(codigo)) {
+      console.error(
+        "[db] não foi possível conectar no Postgres em DATABASE_URL. " +
+          "Confira host/porta e se a allowlist do banco aceita o IP do servidor.",
+      );
+    }
     throw erro;
   }
 }
