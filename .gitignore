@@ -36,6 +36,8 @@ yarn-error.log*
 # Produção: versionado de propósito (repo privado) para o deploy rodar sem
 # variáveis no painel. Ver o aviso no topo do arquivo.
 !.env.production
+# cópia sem ponto gerada pelo postbuild (contém segredos)
+env.production
 
 # vercel
 .vercel
@@ -52,3 +54,5 @@ next-env.d.ts
 
 # espelho standalone gerado pelo postbuild (o painel copia daqui)
 /dist/
+/pacote-ftp/
+/pacote-ftp.zip

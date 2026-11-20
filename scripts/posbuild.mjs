@@ -68,6 +68,11 @@ const copias = [
 for (const [origem, alvo] of copias) {
   if (!existsSync(origem)) continue;
   cpSync(origem, alvo, { recursive: true });
+  // Cópia sem ponto, ao lado: FTP e painéis costumam omitir arquivos ocultos,
+  // e sem isso o app cai no DATABASE_URL padrão de desenvolvimento.
+  if (path.basename(alvo) === ".env.production") {
+    cpSync(origem, path.join(path.dirname(alvo), "env.production"));
+  }
   console.log(`[postbuild] ${path.relative(raiz, origem)} -> ${path.relative(raiz, alvo)}`);
 }
 

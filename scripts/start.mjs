@@ -17,7 +17,7 @@
  */
 import { spawn } from "node:child_process";
 import { createServer, request } from "node:http";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,6 +45,70 @@ function acharRaiz() {
 
 const raiz = acharRaiz();
 console.log(`[start] runtime em ${raiz}`);
+
+/**
+ * Carrega a configuração de produção antes de qualquer coisa.
+ *
+ * O Next lê `.env.production` do diretório de build, mas só quando o arquivo
+ * está exatamente ali. Enviando por FTP/painel, arquivos que começam com ponto
+ * costumam ser omitidos — sintoma: `DATABASE_URL` indefinido e o app tentando
+ * `127.0.0.1:55432` (o padrão de desenvolvimento).
+ *
+ * Para não depender de arquivo oculto, a mesma configuração é procurada também
+ * em `env.production` e em `config.json`. Variável já definida no ambiente
+ * sempre vence: nada aqui sobrescreve o que o servidor injetou.
+ */
+function carregarConfig() {
+  const candidatos = [
+    path.join(raiz, ".env.production"),
+    path.join(raiz, "env.production"),
+    path.join(raiz, "config.json"),
+  ];
+
+  for (const arquivo of candidatos) {
+    if (!existsSync(arquivo)) continue;
+    console.log(
+      `[start] carregando configuração de ${path.relative(raiz, arquivo)}`,
+    );
+
+    const texto = readFileSync(arquivo, "utf8");
+    let valores = {};
+
+    if (arquivo.endsWith(".json")) {
+      try {
+        valores = JSON.parse(texto);
+      } catch {
+        console.error(`[start] ${arquivo} não é um JSON válido`);
+        continue;
+      }
+    } else {
+      for (const linha of texto.split(/\r?\n/)) {
+        const limpa = linha.trim();
+        if (!limpa || limpa.startsWith("#")) continue;
+        const igual = limpa.indexOf("=");
+        if (igual < 1) continue;
+        const chave = limpa.slice(0, igual).trim();
+        // Valor entre aspas é opcional; fora delas, preserva espaços internos.
+        const bruto = limpa.slice(igual + 1).trim();
+        valores[chave] = bruto.replace(/^(['"])(.*)\1$/, "$2");
+      }
+    }
+
+    for (const [chave, valor] of Object.entries(valores)) {
+      if (process.env[chave] === undefined && typeof valor === "string") {
+        process.env[chave] = valor;
+      }
+    }
+    return;
+  }
+
+  console.warn(
+    "[start] nenhuma configuração encontrada (.env.production, env.production ou config.json). " +
+      "DATABASE_URL e SESSION_SECRET precisam vir do ambiente do servidor.",
+  );
+}
+
+carregarConfig();
 
 process.env.NODE_ENV ??= "production";
 process.env.HOSTNAME = "0.0.0.0";
