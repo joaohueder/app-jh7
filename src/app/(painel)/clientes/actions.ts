@@ -83,11 +83,7 @@ const clienteSchema = z.object({
     .transform((v) => {
       const id = Number(v);
       return Number.isInteger(id) && id > 0 ? id : null;
-    })
-    .refine(
-      (id) => id === null || Boolean(db.select({ id: niches.id }).from(niches).where(eq(niches.id, id)).get()),
-      "Nicho inexistente.",
-    ),
+    }),
 });
 
 const contratoSchema = z.object({
@@ -145,7 +141,7 @@ export async function getMetaAdAccountsAction(): Promise<{
   if (!(await currentUserHasPermission("clientes", "view"))) {
     return { ok: false, message: "Sem permissão para consultar contas." };
   }
-  const token = getMetaToken();
+  const token = await getMetaToken();
   if (!token) {
     return {
       ok: false,
@@ -215,7 +211,7 @@ async function snapshots(
     });
   }
 
-  const token = getMetaToken();
+  const token = await getMetaToken();
   if (!token) {
     throw new Error(
       "Configure o token da Meta antes de relacionar contas de anúncio.",
@@ -267,11 +263,28 @@ function dadosCliente(formData: FormData) {
   });
 }
 
-function documentoEmUso(document: string | null, ignorarId?: number): boolean {
+/** Nicho apontado precisa existir (o refine do zod não pode consultar o banco). */
+async function nichoExiste(id: number | null): Promise<boolean> {
+  if (id === null) return true;
+  const [linha] = await db
+    .select({ id: niches.id })
+    .from(niches)
+    .where(eq(niches.id, id));
+  return Boolean(linha);
+}
+
+async function documentoEmUso(
+  document: string | null,
+  ignorarId?: number,
+): Promise<boolean> {
   if (!document) return false;
   const condicoes = [eq(clients.document, document)];
   if (typeof ignorarId === "number") condicoes.push(ne(clients.id, ignorarId));
-  return Boolean(db.select({ id: clients.id }).from(clients).where(and(...condicoes)).get());
+  const [linha] = await db
+    .select({ id: clients.id })
+    .from(clients)
+    .where(and(...condicoes));
+  return Boolean(linha);
 }
 
 export async function createClientAction(
@@ -282,15 +295,18 @@ export async function createClientAction(
     await requirePermission("clientes", "create");
     const parsed = dadosCliente(formData);
     if (!parsed.success) return { error: primeiroErro(parsed) };
-    if (documentoEmUso(parsed.data.document)) {
+    if (await documentoEmUso(parsed.data.document)) {
       return { error: "Já existe um cliente com este CPF/CNPJ." };
     }
+    if (!(await nichoExiste(parsed.data.nicheId))) {
+      return { error: "Nicho inexistente." };
+    }
 
-    const criado = db
+    const [criado] = await db
       .insert(clients)
       .values({ ...parsed.data, active: true })
       .returning({ id: clients.id })
-      .get();
+      ;
 
     refresh(criado.id);
     return { ok: true, id: criado.id };
@@ -310,14 +326,17 @@ export async function updateClientAction(
 
     const parsed = dadosCliente(formData);
     if (!parsed.success) return { error: primeiroErro(parsed) };
-    if (documentoEmUso(parsed.data.document, id)) {
+    if (await documentoEmUso(parsed.data.document, id)) {
       return { error: "Já existe um cliente com este CPF/CNPJ." };
     }
+    if (!(await nichoExiste(parsed.data.nicheId))) {
+      return { error: "Nicho inexistente." };
+    }
 
-    db.update(clients)
+    await db.update(clients)
       .set({ ...parsed.data, updatedAt: new Date() })
       .where(eq(clients.id, id))
-      .run();
+      ;
 
     refresh(id);
     return { ok: true, id };
@@ -352,16 +371,16 @@ export async function saveAddressAction(
       updatedAt: new Date(),
     };
 
-    const existente = db
+    const [existente] = await db
       .select({ id: clientAddresses.id })
       .from(clientAddresses)
       .where(eq(clientAddresses.clientId, clientId))
-      .get();
+      ;
 
     if (existente) {
-      db.update(clientAddresses).set(valores).where(eq(clientAddresses.id, existente.id)).run();
+      await db.update(clientAddresses).set(valores).where(eq(clientAddresses.id, existente.id));
     } else {
-      db.insert(clientAddresses).values({ ...valores, clientId }).run();
+      await db.insert(clientAddresses).values({ ...valores, clientId });
     }
 
     refresh(clientId);
@@ -379,10 +398,10 @@ export async function setClientActiveAction(
     await requirePermission("clientes", "edit");
     const id = Number(formData.get("id"));
     if (!Number.isInteger(id) || id <= 0) return { error: "Cliente inválido." };
-    db.update(clients)
+    await db.update(clients)
       .set({ active: formData.get("active") === "true", updatedAt: new Date() })
       .where(eq(clients.id, id))
-      .run();
+      ;
     refresh(id);
     return { ok: true };
   } catch (e) {
@@ -398,7 +417,7 @@ export async function deleteClientAction(
     await requirePermission("clientes", "delete");
     const id = Number(formData.get("id"));
     if (!Number.isInteger(id) || id <= 0) return { error: "Cliente inválido." };
-    db.delete(clients).where(eq(clients.id, id)).run();
+    await db.delete(clients).where(eq(clients.id, id));
     refresh();
     return { ok: true };
   } catch (e) {
@@ -439,16 +458,16 @@ export async function createContractAction(
     const escolhidas = idsContas(formData);
     const contas = await snapshots(escolhidas);
 
-    const criado = db
+    const [criado] = await db
       .insert(contracts)
       .values({ ...parsed.data, clientId })
       .returning({ id: contracts.id })
-      .get();
+      ;
 
     if (contas.length) {
-      db.insert(contractAdAccounts)
+      await db.insert(contractAdAccounts)
         .values(contas.map((a) => ({ ...a, contractId: criado.id })))
-        .run();
+        ;
     }
 
     refresh(clientId);
@@ -467,30 +486,30 @@ export async function updateContractAction(
     const id = Number(formData.get("id"));
     if (!Number.isInteger(id) || id <= 0) return { error: "Contrato inválido." };
 
-    const contrato = db.select().from(contracts).where(eq(contracts.id, id)).get();
+    const [contrato] = await db.select().from(contracts).where(eq(contracts.id, id));
     if (!contrato) return { error: "Contrato não encontrado." };
 
     const parsed = dadosContrato(formData);
     if (!parsed.success) return { error: primeiroErro(parsed) };
 
-    const existentes = db
+    const existentes = await db
       .select()
       .from(contractAdAccounts)
       .where(eq(contractAdAccounts.contractId, id))
-      .all();
+      ;
 
     const contas = await snapshots(idsContas(formData), existentes);
 
-    db.update(contracts)
+    await db.update(contracts)
       .set({ ...parsed.data, updatedAt: new Date() })
       .where(eq(contracts.id, id))
-      .run();
+      ;
 
-    db.delete(contractAdAccounts).where(eq(contractAdAccounts.contractId, id)).run();
+    await db.delete(contractAdAccounts).where(eq(contractAdAccounts.contractId, id));
     if (contas.length) {
-      db.insert(contractAdAccounts)
+      await db.insert(contractAdAccounts)
         .values(contas.map((a) => ({ ...a, contractId: id })))
-        .run();
+        ;
     }
 
     refresh(contrato.clientId);
@@ -509,13 +528,13 @@ export async function setContractStatusAction(
     const id = Number(formData.get("id"));
     if (!Number.isInteger(id) || id <= 0) return { error: "Contrato inválido." };
 
-    const contrato = db.select().from(contracts).where(eq(contracts.id, id)).get();
+    const [contrato] = await db.select().from(contracts).where(eq(contracts.id, id));
     if (!contrato) return { error: "Contrato não encontrado." };
 
-    db.update(contracts)
+    await db.update(contracts)
       .set({ status: formData.get("status") === "active" ? "active" : "inactive", updatedAt: new Date() })
       .where(eq(contracts.id, id))
-      .run();
+      ;
 
     refresh(contrato.clientId);
     return { ok: true };
@@ -533,10 +552,10 @@ export async function deleteContractAction(
     const id = Number(formData.get("id"));
     if (!Number.isInteger(id) || id <= 0) return { error: "Contrato inválido." };
 
-    const contrato = db.select().from(contracts).where(eq(contracts.id, id)).get();
+    const [contrato] = await db.select().from(contracts).where(eq(contracts.id, id));
     if (!contrato) return { error: "Contrato não encontrado." };
 
-    db.delete(contracts).where(eq(contracts.id, id)).run();
+    await db.delete(contracts).where(eq(contracts.id, id));
     refresh(contrato.clientId);
     return { ok: true };
   } catch (e) {
@@ -566,9 +585,9 @@ export async function createNoteAction(
     });
     if (!parsed.success) return { error: primeiroErro(parsed) };
 
-    db.insert(clientNotes)
+    await db.insert(clientNotes)
       .values({ ...parsed.data, clientId, createdAt: new Date() })
-      .run();
+      ;
     refresh(clientId);
     return { ok: true };
   } catch (e) {
@@ -585,10 +604,10 @@ export async function deleteNoteAction(
     const id = Number(formData.get("id"));
     if (!Number.isInteger(id) || id <= 0) return { error: "Anotação inválida." };
 
-    const nota = db.select().from(clientNotes).where(eq(clientNotes.id, id)).get();
+    const [nota] = await db.select().from(clientNotes).where(eq(clientNotes.id, id));
     if (!nota) return { error: "Anotação não encontrada." };
 
-    db.delete(clientNotes).where(eq(clientNotes.id, id)).run();
+    await db.delete(clientNotes).where(eq(clientNotes.id, id));
     refresh(nota.clientId);
     return { ok: true };
   } catch (e) {
@@ -601,9 +620,9 @@ export async function deleteNoteAction(
 /* ------------------------------------------------------------------ */
 
 export async function listClients() {
-  const rows = db.select().from(clients).orderBy(clients.businessName).all();
-  const todosContratos = db.select().from(contracts).all();
-  const todasContas = db.select().from(contractAdAccounts).all();
+  const rows = await db.select().from(clients).orderBy(clients.businessName);
+  const todosContratos = await db.select().from(contracts);
+  const todasContas = await db.select().from(contractAdAccounts);
 
   return rows.map((cliente) => {
     const doCliente = todosContratos.filter((c) => c.clientId === cliente.id);
@@ -624,28 +643,23 @@ export async function listClients() {
  * anúncio de cada contrato. Só clientes ativos entram na listagem.
  */
 export async function listClientsWithContracts() {
-  return db
+  const lista = await db
     .select()
     .from(clients)
     .where(eq(clients.active, true))
-    .orderBy(clients.businessName)
-    .all()
-    .map((cliente) => ({
-      ...cliente,
-      contracts: db
-        .select()
-        .from(contracts)
-        .where(eq(contracts.clientId, cliente.id))
-        .all()
-        .map((contrato) => ({
-          ...contrato,
-          accounts: db
-            .select()
-            .from(contractAdAccounts)
-            .where(eq(contractAdAccounts.contractId, contrato.id))
-            .all(),
-        })),
-    }));
+    .orderBy(clients.businessName);
+  const todosContratos = await db.select().from(contracts);
+  const todasContas = await db.select().from(contractAdAccounts);
+
+  return lista.map((cliente) => ({
+    ...cliente,
+    contracts: todosContratos
+      .filter((contrato) => contrato.clientId === cliente.id)
+      .map((contrato) => ({
+        ...contrato,
+        accounts: todasContas.filter((a) => a.contractId === contrato.id),
+      })),
+  }));
 }
 
 export type ClientComContratos = Awaited<
@@ -655,38 +669,34 @@ export type ClientComContratos = Awaited<
 export type ClientListItem = Awaited<ReturnType<typeof listClients>>[number];
 
 export async function getClientDetail(clientId: number) {
-  const cliente = db.select().from(clients).where(eq(clients.id, clientId)).get();
+  const [cliente] = await db.select().from(clients).where(eq(clients.id, clientId));
   if (!cliente) return null;
 
-  const endereco =
-    db
+  const [endereco] =
+    (await db
       .select()
       .from(clientAddresses)
-      .where(eq(clientAddresses.clientId, clientId))
-      .get() ?? null;
+      .where(eq(clientAddresses.clientId, clientId))) ?? [];
 
-  const contratos = db
+  const contratos = await db
     .select()
     .from(contracts)
     .where(eq(contracts.clientId, clientId))
-    .orderBy(desc(contracts.startDate))
-    .all();
+    .orderBy(desc(contracts.startDate));
 
   const idsDosContratos = contratos.map((c) => c.id);
   const contas = idsDosContratos.length
-    ? db
+    ? await db
         .select()
         .from(contractAdAccounts)
         .where(inArray(contractAdAccounts.contractId, idsDosContratos))
-        .all()
     : [];
 
-  const anotacoes = db
+  const anotacoes = await db
     .select()
     .from(clientNotes)
     .where(eq(clientNotes.clientId, clientId))
-    .orderBy(desc(clientNotes.createdAt), desc(clientNotes.id))
-    .all();
+    .orderBy(desc(clientNotes.createdAt), desc(clientNotes.id));
 
   return {
     cliente,

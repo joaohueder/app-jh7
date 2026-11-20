@@ -1,13 +1,13 @@
 import "dotenv/config";
 import { asc, eq } from "drizzle-orm";
 
-import { db } from "../src/lib/db";
+import { db, pool } from "../src/lib/db";
 import { clients, reports } from "../src/lib/db/schema";
 import { gerarSnapshotRelatorio } from "../src/lib/meta/relatorio";
 
 async function main() {
   const ids = process.argv.slice(2).map(Number).filter(Number.isInteger);
-  const todos = db
+  const todos = await db
     .select({
       id: reports.id,
       clientId: reports.clientId,
@@ -17,8 +17,7 @@ async function main() {
     })
     .from(reports)
     .innerJoin(clients, eq(clients.id, reports.clientId))
-    .orderBy(asc(reports.id))
-    .all();
+    .orderBy(asc(reports.id));
   const alvos = ids.length ? todos.filter((r) => ids.includes(r.id)) : todos;
 
   for (const alvo of alvos) {
@@ -28,10 +27,10 @@ async function main() {
         console.log({ id: alvo.id, cliente: alvo.cliente, erro: gerado.message });
         continue;
       }
-      db.update(reports)
+      await db
+        .update(reports)
         .set({ data: JSON.stringify(gerado.snapshot) })
-        .where(eq(reports.id, alvo.id))
-        .run();
+        .where(eq(reports.id, alvo.id));
       console.log({
         id: alvo.id,
         cliente: alvo.cliente,
@@ -46,7 +45,9 @@ async function main() {
   }
 }
 
-main().catch((erro) => {
-  console.error(erro);
-  process.exit(1);
-});
+main()
+  .catch((erro) => {
+    console.error(erro);
+    process.exitCode = 1;
+  })
+  .finally(() => pool.end());

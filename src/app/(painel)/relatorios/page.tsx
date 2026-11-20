@@ -19,7 +19,7 @@ export default async function RelatoriosPage() {
   const { nichos } = await listNiches();
 
   const mes = hojeIso().slice(0, 7);
-  const bloqueados = clientesBloqueados(
+  const bloqueados = await clientesBloqueados(
     clientes.map((c) => c.id),
     mes,
   );

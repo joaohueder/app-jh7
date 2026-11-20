@@ -159,7 +159,7 @@ export async function testMetaConnectionAction(
   await requirePermission("configuracoes", "edit");
 
   const digitado = String(formData.get("metaToken") ?? "").trim();
-  const token = digitado || getMetaToken();
+  const token = digitado || (await getMetaToken());
 
   if (!token) {
     return {
@@ -247,7 +247,7 @@ export async function testIaConnectionAction(
   const baseUrl = String(formData.get("baseUrl") ?? "").trim();
   const model = String(formData.get("model") ?? "").trim();
   const digitada = String(formData.get("apiKey") ?? "").trim();
-  const salva = getIaConfig();
+  const salva = await getIaConfig();
 
   const config = {
     baseUrl: baseUrl || salva?.baseUrl || "",
@@ -292,7 +292,7 @@ export async function listarModelosIaAction(
 
   const baseUrl = String(formData.get("baseUrl") ?? "").trim();
   const digitada = String(formData.get("apiKey") ?? "").trim();
-  const salva = getIaConfig();
+  const salva = await getIaConfig();
   const apiKey = digitada || salva?.apiKey || "";
 
   if (!baseUrl) {

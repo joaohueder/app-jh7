@@ -22,7 +22,7 @@ export default async function PainelLayout({
   children: ReactNode;
 }) {
   const user = await requireUser();
-  const { systemName, logoPath } = getSettings();
+  const { systemName, logoPath } = await getSettings();
 
   const menuItems: MenuItem[] = [
     // Dashboard abre para todo usuário logado: não é módulo com ACL própria.

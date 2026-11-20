@@ -26,11 +26,13 @@ export default async function FinanceiroPage({
   const hoje = hojeIso();
   const mes = normalizarMes(params.mes, hoje);
 
-  const lancamentos = listarLancamentos(mes, hoje);
-  const resumo = resumoFinanceiro(mes, hoje);
-  const clientes = listarClientesParaLancamento();
+  const lancamentos = await listarLancamentos(mes, hoje);
+  const resumo = await resumoFinanceiro(mes, hoje);
+  const clientes = await listarClientesParaLancamento();
   const baixasDoLancamento = Object.fromEntries(
-    lancamentos.map((l) => [l.id, listarBaixas(l.id)]),
+    await Promise.all(
+      lancamentos.map(async (l) => [l.id, await listarBaixas(l.id)] as const),
+    ),
   );
 
   const admin = user.role === "admin";

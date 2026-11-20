@@ -17,9 +17,9 @@ export default async function ConfiguracoesPage({
   const { aba } = await searchParams;
   const usuario = await requirePermission("configuracoes", "view");
   const podeEditar = userHasPermission(usuario, "configuracoes", "edit");
-  const { systemName, logoPath, hasUploadedLogo } = getSettings();
-  const meta = getMetaSettings();
-  const ia = getIaSettings();
+  const { systemName, logoPath, hasUploadedLogo } = await getSettings();
+  const meta = await getMetaSettings();
+  const ia = await getIaSettings();
   const { nichos, semNicho } = await listNiches();
 
   return (

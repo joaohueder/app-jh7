@@ -43,12 +43,12 @@ async function comCache<T>(
   forcar = false,
 ): Promise<T> {
   if (!forcar) {
-    const guardado = lerCache<T>(chave);
+    const guardado = await lerCache<T>(chave);
     if (guardado) return guardado.valor;
   }
 
   const valor = await buscar();
-  gravarCache(chave, valor);
+  await gravarCache(chave, valor);
   return valor;
 }
 

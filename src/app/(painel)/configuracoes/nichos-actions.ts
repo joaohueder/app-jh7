@@ -23,8 +23,11 @@ function revalidar() {
 
 /** Nichos em ordem de exibição, com quantos clientes cada um tem. */
 export async function listNiches() {
-  const todos = db.select().from(niches).orderBy(asc(niches.position), asc(niches.name)).all();
-  const vinculos = db.select({ nicheId: clients.nicheId }).from(clients).all();
+  const todos = await db
+    .select()
+    .from(niches)
+    .orderBy(asc(niches.position), asc(niches.name));
+  const vinculos = await db.select({ nicheId: clients.nicheId }).from(clients);
 
   const porNicho = new Map<number, number>();
   let semNicho = 0;
@@ -50,22 +53,20 @@ export async function createNicheAction(
       return { error: parsed.error.issues[0]?.message ?? "Nome inválido." };
     }
 
-    const existente = db
+    const [existente] = await db
       .select({ id: niches.id })
       .from(niches)
-      .where(eq(niches.name, parsed.data))
-      .get();
+      .where(eq(niches.name, parsed.data));
     if (existente) return { error: "Já existe um nicho com este nome." };
 
     // Novo nicho entra no fim da lista.
-    const ultimo = db.select({ position: niches.position }).from(niches).all();
+    const ultimo = await db.select({ position: niches.position }).from(niches);
     const proxima = ultimo.reduce((maior, n) => Math.max(maior, n.position), 0) + 1;
 
-    const criado = db
+    const [criado] = await db
       .insert(niches)
       .values({ name: parsed.data, position: proxima })
-      .returning({ id: niches.id })
-      .get();
+      .returning({ id: niches.id });
 
     revalidar();
     return { ok: true, id: criado.id };
@@ -88,19 +89,18 @@ export async function renameNicheAction(
       return { error: parsed.error.issues[0]?.message ?? "Nome inválido." };
     }
 
-    const conflito = db
+    const [conflito] = await db
       .select({ id: niches.id })
       .from(niches)
-      .where(eq(niches.name, parsed.data))
-      .get();
+      .where(eq(niches.name, parsed.data));
     if (conflito && conflito.id !== id) {
       return { error: "Já existe um nicho com este nome." };
     }
 
-    db.update(niches)
+    await db.update(niches)
       .set({ name: parsed.data, updatedAt: new Date() })
       .where(eq(niches.id, id))
-      .run();
+      ;
 
     revalidar();
     return { ok: true, id };
@@ -118,7 +118,7 @@ export async function deleteNicheAction(id: number): Promise<NichoState> {
     await requirePermission("configuracoes", "edit");
     if (!Number.isInteger(id) || id <= 0) return { error: "Nicho inválido." };
 
-    db.delete(niches).where(eq(niches.id, id)).run();
+    await db.delete(niches).where(eq(niches.id, id));
     revalidar();
     return { ok: true };
   } catch {

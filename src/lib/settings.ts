@@ -54,12 +54,11 @@ function logoEnviado(): string | null {
   return null;
 }
 
-export function getSettings(): AppSettings {
-  const rows = db
+export async function getSettings(): Promise<AppSettings> {
+  const rows = await db
     .select()
     .from(settings)
     .where(inArray(settings.key, [SETTING_KEYS.systemName]))
-    .all();
 
   const nome = rows.find((row) => row.key === SETTING_KEYS.systemName)?.value?.trim();
   const enviado = logoEnviado();
@@ -72,12 +71,11 @@ export function getSettings(): AppSettings {
 }
 
 /** Lê o estado do token da Meta sem nunca expor o valor completo à UI. */
-export function getMetaSettings(): MetaSettings {
-  const row = db
+export async function getMetaSettings(): Promise<MetaSettings> {
+  const [row] = await db
     .select()
     .from(settings)
     .where(inArray(settings.key, [SETTING_KEYS.metaToken]))
-    .get();
 
   if (!row || !row.value.trim()) {
     return { hasToken: false, tokenHint: null, updatedAt: null };
@@ -92,19 +90,18 @@ export function getMetaSettings(): MetaSettings {
 }
 
 /** Valor bruto (servidor apenas — usado pelas chamadas à API da Meta). */
-export function getMetaToken(): string | null {
-  const row = db
+export async function getMetaToken(): Promise<string | null> {
+  const [row] = await db
     .select()
     .from(settings)
     .where(inArray(settings.key, [SETTING_KEYS.metaToken]))
-    .get();
   const value = row?.value?.trim();
   return value ? value : null;
 }
 
 /** Retorna a configuração de IA sem expor a chave secreta completa. */
-export function getIaSettings(): IaSettings {
-  const rows = db
+export async function getIaSettings(): Promise<IaSettings> {
+  const rows = await db
     .select()
     .from(settings)
     .where(
@@ -114,7 +111,6 @@ export function getIaSettings(): IaSettings {
         SETTING_KEYS.iaModel,
       ]),
     )
-    .all();
 
   const map = new Map(rows.map((row) => [row.key, row]));
   const apiKey = map.get(SETTING_KEYS.iaApiKey)?.value?.trim() ?? "";
@@ -134,8 +130,8 @@ export function getIaSettings(): IaSettings {
 }
 
 /** Configuração completa só para chamadas server-side da IA. */
-export function getIaConfig() {
-  const rows = db
+export async function getIaConfig() {
+  const rows = await db
     .select()
     .from(settings)
     .where(
@@ -145,7 +141,6 @@ export function getIaConfig() {
         SETTING_KEYS.iaModel,
       ]),
     )
-    .all();
 
   const map = new Map(rows.map((row) => [row.key, row.value]));
   const baseUrl = map.get(SETTING_KEYS.iaBaseUrl)?.trim() ?? "";
@@ -156,12 +151,11 @@ export function getIaConfig() {
   return { baseUrl, model, apiKey };
 }
 
-export function setSetting(key: string, value: string): void {
-  db.insert(settings)
+export async function setSetting(key: string, value: string): Promise<void> {
+  await db.insert(settings)
     .values({ key, value })
     .onConflictDoUpdate({
       target: settings.key,
       set: { value, updatedAt: new Date() },
     })
-    .run();
 }

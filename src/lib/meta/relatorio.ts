@@ -998,32 +998,27 @@ async function carregarEstrutura(
 /* ------------------------------------------------------------------ */
 
 /** URL do Instagram do contrato, usada para achar a conta profissional. */
-function instagramDoCliente(clientId: number): string | null {
-  const linha = db
+async function instagramDoCliente(clientId: number): Promise<string | null> {
+  const linhas = await db
     .select({ url: contracts.instagramUrl })
     .from(contracts)
-    .where(eq(contracts.clientId, clientId))
-    .all()
-    .find((c) => c.url?.trim());
-  return linha?.url?.trim() ?? null;
+    .where(eq(contracts.clientId, clientId));
+  return linhas.find((c) => c.url?.trim())?.url?.trim() ?? null;
 }
 
 /** Contas de anúncio dos contratos do cliente (as mesmas do módulo Campanhas). */
 async function contasDoRelatorio(clientId: number): Promise<ContaDoCliente[]> {
-  const lista = db
+  const lista = await db
     .select({ id: contracts.id, name: contracts.name })
     .from(contracts)
-    .where(eq(contracts.clientId, clientId))
-    .all();
+    .where(eq(contracts.clientId, clientId));
+
+  const todasContas = await db.select().from(contractAdAccounts);
 
   return contasDoCliente(
     lista.map((contrato) => ({
       name: contrato.name,
-      accounts: db
-        .select()
-        .from(contractAdAccounts)
-        .where(eq(contractAdAccounts.contractId, contrato.id))
-        .all(),
+      accounts: todasContas.filter((a) => a.contractId === contrato.id),
     })),
   );
 }
@@ -1037,14 +1032,13 @@ export async function gerarSnapshotRelatorio(
   since: string,
   until: string,
 ): Promise<{ ok: true; snapshot: RelatorioSnapshot } | { ok: false; message: string }> {
-  const cliente = db
+  const [cliente] = await db
     .select({ id: clients.id, nome: clients.businessName })
     .from(clients)
-    .where(eq(clients.id, clientId))
-    .get();
+    .where(eq(clients.id, clientId));
   if (!cliente) return { ok: false, message: "Cliente não encontrado." };
 
-  const token = getMetaToken();
+  const token = await getMetaToken();
   if (!token) {
     return {
       ok: false,
@@ -1069,6 +1063,7 @@ export async function gerarSnapshotRelatorio(
   }
 
   const anteriorPeriodo = janelaAnterior(since, until);
+  const instagram = await instagramDoCliente(clientId);
 
   // Campanhas de tráfego para o perfil do Instagram, pelo objetivo + destino
   // que vieram na própria consulta de campanhas. Chave: id da campanha.
@@ -1107,17 +1102,11 @@ export async function gerarSnapshotRelatorio(
     // visualizações de ambas (o gráfico compara as duas séries).
     const [perfil, perfilAnterior, contaAtualSerie, contaAnteriorSerie] =
       await Promise.all([
+        perfilInstagramPorDia(token, cliente.nome, instagram, since, until),
         perfilInstagramPorDia(
           token,
           cliente.nome,
-          instagramDoCliente(clientId),
-          since,
-          until,
-        ),
-        perfilInstagramPorDia(
-          token,
-          cliente.nome,
-          instagramDoCliente(clientId),
+          instagram,
           anteriorPeriodo.since,
           anteriorPeriodo.until,
         ),

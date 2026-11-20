@@ -12,14 +12,16 @@ export type RelatorioListaItem = {
 };
 
 /** Relatórios de um cliente, mais recentes primeiro. */
-export function listarRelatorios(clientId: number): RelatorioListaItem[] {
-  return db
+export async function listarRelatorios(
+  clientId: number,
+): Promise<RelatorioListaItem[]> {
+  const linhas = await db
     .select()
     .from(reports)
     .where(eq(reports.clientId, clientId))
-    .orderBy(desc(reports.id))
-    .all()
-    .map((r) => ({
+    .orderBy(desc(reports.id));
+
+  return linhas.map((r) => ({
       id: r.id,
       inicio: r.startDate,
       fim: r.endDate,

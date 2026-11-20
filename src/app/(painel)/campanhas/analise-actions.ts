@@ -79,7 +79,7 @@ export async function analisarAnunciosAction(
     };
   }
 
-  const config = getIaConfig();
+  const config = await getIaConfig();
   if (!config) {
     return {
       ok: false,

@@ -15,7 +15,7 @@ type LoginPageProps = {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const [{ next }, { systemName, logoPath }] = await Promise.all([
     searchParams,
-    Promise.resolve(getSettings()),
+    getSettings(),
   ]);
   const frase = sortearFrase();
   const ano = new Date().getFullYear();

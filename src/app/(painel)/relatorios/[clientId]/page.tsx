@@ -31,7 +31,7 @@ export default async function RelatoriosDoClientePage({
   if (!cliente) notFound();
 
   const hoje = hojeIso();
-  if (situacaoCobranca(id, hoje.slice(0, 7)).bloqueado) {
+  if ((await situacaoCobranca(id, hoje.slice(0, 7))).bloqueado) {
     return (
       <div className="space-y-6">
         <CabecalhoCampanhas
@@ -43,7 +43,7 @@ export default async function RelatoriosDoClientePage({
     );
   }
 
-  const relatorios = listarRelatorios(id);
+  const relatorios = await listarRelatorios(id);
   const admin = user.role === "admin";
   const permitido = (acao: "create" | "delete") =>
     admin || (user.permissions.relatorios?.includes(acao) ?? false);

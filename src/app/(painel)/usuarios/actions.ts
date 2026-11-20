@@ -96,11 +96,10 @@ export async function createUserAction(
       return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
     }
 
-    const existente = db
+    const [existente] = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.email, parsed.data.email))
-      .get();
+      .where(eq(users.email, parsed.data.email));
     if (existente) {
       return { error: "Já existe um usuário com este e-mail." };
     }
@@ -111,7 +110,7 @@ export async function createUserAction(
 
     const passwordHash = await hashPassword(parsed.data.password);
 
-    db.insert(users)
+    await db.insert(users)
       .values({
         name: parsed.data.name,
         email: parsed.data.email,
@@ -120,7 +119,7 @@ export async function createUserAction(
         passwordHash,
         active: true,
       })
-      .run();
+      ;
 
     revalidarUsuarios();
     return { ok: true };
@@ -145,7 +144,7 @@ export async function updateUserAction(
       return { error: "Usuário inválido." };
     }
 
-    const alvo = db.select().from(users).where(eq(users.id, id)).get();
+    const [alvo] = await db.select().from(users).where(eq(users.id, id));
     if (!alvo) return { error: "Usuário não encontrado." };
 
     const parsed = userUpdateSchema.safeParse({
@@ -189,7 +188,7 @@ export async function updateUserAction(
       updates.passwordHash = await hashPassword(parsed.data.password);
     }
 
-    db.update(users).set(updates).where(eq(users.id, id)).run();
+    await db.update(users).set(updates).where(eq(users.id, id));
 
     revalidarUsuarios();
     return { ok: true };
@@ -215,7 +214,7 @@ export async function setUserActiveAction(
       return { error: "Usuário inválido." };
     }
 
-    const alvo = db.select().from(users).where(eq(users.id, id)).get();
+    const [alvo] = await db.select().from(users).where(eq(users.id, id));
     if (!alvo) return { error: "Usuário não encontrado." };
 
     if (alvo.id === (await currentUserId())) {
@@ -228,10 +227,10 @@ export async function setUserActiveAction(
       return { error: "Somente um administrador pode desativar outro administrador." };
     }
 
-    db.update(users)
+    await db.update(users)
       .set({ active: ativo, updatedAt: new Date() })
       .where(eq(users.id, id))
-      .run();
+      ;
 
     revalidarUsuarios();
     return { ok: true };
@@ -256,7 +255,7 @@ export async function deleteUserAction(
       return { error: "Usuário inválido." };
     }
 
-    const alvo = db.select().from(users).where(eq(users.id, id)).get();
+    const [alvo] = await db.select().from(users).where(eq(users.id, id));
     if (!alvo) return { error: "Usuário não encontrado." };
 
     if (alvo.id === (await currentUserId())) {
@@ -271,7 +270,7 @@ export async function deleteUserAction(
       }
     }
 
-    db.delete(users).where(eq(users.id, id)).run();
+    await db.delete(users).where(eq(users.id, id));
 
     revalidarUsuarios();
     return { ok: true };
@@ -300,11 +299,10 @@ async function eUnicoAdmin(idExcluido?: number): Promise<boolean> {
   if (typeof idExcluido === "number") {
     condicoes.push(ne(users.id, idExcluido));
   }
-  const total = db
+  const [total] = await db
     .select({ total: count() })
     .from(users)
-    .where(and(...condicoes))
-    .get();
+    .where(and(...condicoes));
   return (total?.total ?? 0) === 0;
 }
 
@@ -325,7 +323,7 @@ export type UserListItem = {
 
 /** Lista completa para a tela (campos sensíveis ficam fora). */
 export async function listUsers(): Promise<UserListItem[]> {
-  const rows = db
+  const rows = await db
     .select({
       id: users.id,
       name: users.name,
@@ -336,8 +334,7 @@ export async function listUsers(): Promise<UserListItem[]> {
       createdAt: users.createdAt,
     })
     .from(users)
-    .orderBy(users.name)
-    .all();
+    .orderBy(users.name);
 
   return rows.map((row) => ({
     ...row,

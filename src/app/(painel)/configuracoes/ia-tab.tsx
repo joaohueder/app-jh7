@@ -199,7 +199,7 @@ export function IaTab({
           Referência do formato Chat Completions <ExternalLink className="size-3" aria-hidden="true" />
         </a>
         <div className="inline-flex items-center gap-2 text-xs text-jade">
-          <BadgeCheck className="size-3.5" aria-hidden="true" /> A chave fica apenas no banco SQLite local.
+          <BadgeCheck className="size-3.5" aria-hidden="true" /> A chave fica apenas no banco de dados do sistema.
         </div>
       </aside>
     </div>

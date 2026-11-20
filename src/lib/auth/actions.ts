@@ -81,7 +81,7 @@ export async function loginAction(
     };
   }
 
-  const user = db.select().from(users).where(eq(users.email, email)).get();
+  const [user] = await db.select().from(users).where(eq(users.email, email));
 
   const senhaOk =
     user && user.active

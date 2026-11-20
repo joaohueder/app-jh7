@@ -18,14 +18,14 @@ import {
 } from "./comum";
 
 /** Baixas válidas (não estornadas) de um lançamento, mais recentes primeiro. */
-export function listarBaixas(entryId: number): Baixa[] {
-  return db
+export async function listarBaixas(entryId: number): Promise<Baixa[]> {
+  const linhas = await db
     .select()
     .from(financePayments)
     .where(eq(financePayments.entryId, entryId))
-    .orderBy(asc(financePayments.paidOn), asc(financePayments.id))
-    .all()
-    .map((b) => ({
+    .orderBy(asc(financePayments.paidOn), asc(financePayments.id));
+
+  return linhas.map((b) => ({
       id: b.id,
       valor: b.amount,
       data: b.paidOn,
@@ -38,13 +38,14 @@ export function listarBaixas(entryId: number): Baixa[] {
 }
 
 /** Quanto está baixado por lançamento: soma das baixas válidas. */
-function somasPorLancamento(): Map<number, { total: number; ultima: string | null }> {
+async function somasPorLancamento(): Promise<
+  Map<number, { total: number; ultima: string | null }>
+> {
   const mapa = new Map<number, { total: number; ultima: string | null }>();
-  const linhas = db
+  const linhas = await db
     .select()
     .from(financePayments)
-    .where(isNull(financePayments.reversedAt))
-    .all();
+    .where(isNull(financePayments.reversedAt));
 
   for (const linha of linhas) {
     const atual = mapa.get(linha.entryId) ?? { total: 0, ultima: null };
@@ -59,11 +60,14 @@ function somasPorLancamento(): Map<number, { total: number; ultima: string | nul
  * Lançamentos do mês escolhido + os que ainda têm saldo de meses anteriores,
  * `para a inadimplência não sumir ao trocar de mês.
  */
-export function listarLancamentos(mes: string, hoje: string): Lancamento[] {
+export async function listarLancamentos(
+  mes: string,
+  hoje: string,
+): Promise<Lancamento[]> {
   const { inicio, fim } = intervaloDoMes(mes);
-  const somas = somasPorLancamento();
+  const somas = await somasPorLancamento();
 
-  return db
+  const linhas = await db
     .select({
       id: financeEntries.id,
       kind: financeEntries.kind,
@@ -81,8 +85,9 @@ export function listarLancamentos(mes: string, hoje: string): Lancamento[] {
     // Sem filtro de data no SQL: o volume é pequeno e a regra depende do que
     // já foi baixado (parcela antiga some só quando quita).
     .where(gte(financeEntries.dueDate, "0000-00-00"))
-    .orderBy(asc(financeEntries.dueDate), asc(financeEntries.id))
-    .all()
+    .orderBy(asc(financeEntries.dueDate), asc(financeEntries.id));
+
+  return linhas
     .map((linha) => {
       const soma = somas.get(linha.id);
       const { status, baixado, saldo } = situacaoDoLancamento(
@@ -112,14 +117,17 @@ export function listarLancamentos(mes: string, hoje: string): Lancamento[] {
     .filter((l) => l.vencimento <= fim && (l.vencimento >= inicio || l.saldo > 0));
 }
 
-export function resumoFinanceiro(mes: string, hoje: string): ResumoFinanceiro {
-  const lancamentos = listarLancamentos(mes, hoje);
+export async function resumoFinanceiro(
+  mes: string,
+  hoje: string,
+): Promise<ResumoFinanceiro> {
+  const lancamentos = await listarLancamentos(mes, hoje);
   const { inicio, fim } = intervaloDoMes(mes);
   const doMes = (l: Lancamento) => l.vencimento >= inicio && l.vencimento <= fim;
 
   // Recebido/pago contam a baixa, não o vencimento: o dinheiro do mês é o que
   // entrou, mesmo que a parcela fosse de outro mês.
-  const baixasDoMes = db
+  const baixasDoMes = await db
     .select()
     .from(financePayments)
     .where(
@@ -128,8 +136,7 @@ export function resumoFinanceiro(mes: string, hoje: string): ResumoFinanceiro {
         gte(financePayments.paidOn, inicio),
         lte(financePayments.paidOn, fim),
       ),
-    )
-    .all();
+    );
 
   const somaBaixas = (kind: FinanceKind) => {
     const ids = new Set(
@@ -156,10 +163,12 @@ export function resumoFinanceiro(mes: string, hoje: string): ResumoFinanceiro {
 }
 
 /** Opções de cliente para o formulário. */
-export function listarClientesParaLancamento(): { id: number; nome: string }[] {
+export async function listarClientesParaLancamento(): Promise<
+  { id: number; nome: string }[]
+> {
   return db
     .select({ id: clients.id, nome: clients.businessName })
     .from(clients)
     .orderBy(asc(clients.businessName))
-    .all();
+    ;
 }

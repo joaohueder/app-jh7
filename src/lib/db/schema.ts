@@ -1,28 +1,38 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  bigint,
+  boolean,
+  index,
+  jsonb,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 /**
  * Usuários do sistema (equipe interna da JH7).
  * Papéis: admin | user
  */
-export const users = sqliteTable("users", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const users = pgTable("users", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("user"),
   /** ACL por usuário. Sempre validada no servidor contra PERMISSION_MODULES. */
-  permissions: text("permissions", { mode: "json" })
+  permissions: jsonb("permissions")
     .$type<Record<string, string[]>>()
     .notNull()
     .default(sql`'{}'`),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 /**
@@ -30,12 +40,12 @@ export const users = sqliteTable("users", {
  * Já usada para system_name e logo_path; servirá depois para
  * a chave de IA e o token da Meta Ads.
  */
-export const settings = sqliteTable("settings", {
+export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
+  updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 /**
@@ -43,28 +53,28 @@ export const settings = sqliteTable("settings", {
  * Fotografia...). Cadastrados nas Configurações e usados para agrupar a
  * carteira; o cliente aponta para um nicho.
  */
-export const niches = sqliteTable(
+export const niches = pgTable(
   "niches",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     name: text("name").notNull(),
     /** Ordem de exibição; o cadastro define, a lista respeita. */
     position: integer("position").notNull().default(0),
-    createdAt: integer("created_at", { mode: "timestamp" })
+    createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
+      .defaultNow(),
   },
   (table) => [uniqueIndex("niches_name_unique").on(table.name)],
 );
 
 /** Cadastro de clientes da agência. Documento opcional, porém único quando informado. */
-export const clients = sqliteTable(
+export const clients = pgTable(
   "clients",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     businessName: text("business_name").notNull(),
     legalName: text("legal_name"),
     document: text("document"),
@@ -76,7 +86,7 @@ export const clients = sqliteTable(
     whatsapp: text("whatsapp"),
     /** Nicho de atuação (Bar e Restaurantes, Loja de Veículo...). */
     nicheId: integer("niche_id").references(() => niches.id, { onDelete: "set null" }),
-    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    active: boolean("active").notNull().default(true),
     /**
      * @deprecated cidade/UF/observações antigas. O endereço agora vive em
      * `client_addresses` e as anotações em `client_notes`. Mantidas para não
@@ -85,12 +95,12 @@ export const clients = sqliteTable(
     city: text("city"),
     state: text("state"),
     notes: text("notes"),
-    createdAt: integer("created_at", { mode: "timestamp" })
+    createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
+      .defaultNow(),
   },
   (table) => [
     uniqueIndex("clients_document_unique").on(table.document),
@@ -103,10 +113,10 @@ export const clients = sqliteTable(
  * @deprecated as contas agora pertencem ao contrato (`contract_ad_accounts`).
  * Mantida apenas com os dados migrados; a UI usa o vínculo por contrato.
  */
-export const clientAdAccounts = sqliteTable(
+export const clientAdAccounts = pgTable(
   "client_ad_accounts",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     clientId: integer("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
@@ -114,9 +124,9 @@ export const clientAdAccounts = sqliteTable(
     name: text("name").notNull(),
     currency: text("currency"),
     accountStatus: integer("account_status"),
-    createdAt: integer("created_at", { mode: "timestamp" })
+    createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
+      .defaultNow(),
   },
   (table) => [
     uniqueIndex("client_ad_accounts_client_account_unique").on(
@@ -128,10 +138,10 @@ export const clientAdAccounts = sqliteTable(
 );
 
 /** Endereço do cliente (um por cliente). */
-export const clientAddresses = sqliteTable(
+export const clientAddresses = pgTable(
   "client_addresses",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     clientId: integer("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
@@ -142,18 +152,18 @@ export const clientAddresses = sqliteTable(
     district: text("district"),
     city: text("city"),
     state: text("state"),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
+    updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
+      .defaultNow(),
   },
   (table) => [uniqueIndex("client_addresses_client_unique").on(table.clientId)],
 );
 
 /** Contratos do cliente. Cada contrato tem suas próprias contas de anúncio. */
-export const contracts = sqliteTable(
+export const contracts = pgTable(
   "contracts",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     clientId: integer("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
@@ -172,21 +182,21 @@ export const contracts = sqliteTable(
      * mais curtos). Sem valor, cai no dia do início do contrato.
      */
     dueDay: integer("due_day"),
-    createdAt: integer("created_at", { mode: "timestamp" })
+    createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
+      .defaultNow(),
   },
   (table) => [index("contracts_client_idx").on(table.clientId)],
 );
 
 /** Vínculo de contrato com conta externa de anúncios Meta (com snapshot). */
-export const contractAdAccounts = sqliteTable(
+export const contractAdAccounts = pgTable(
   "contract_ad_accounts",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     contractId: integer("contract_id")
       .notNull()
       .references(() => contracts.id, { onDelete: "cascade" }),
@@ -194,9 +204,9 @@ export const contractAdAccounts = sqliteTable(
     name: text("name").notNull(),
     currency: text("currency"),
     accountStatus: integer("account_status"),
-    createdAt: integer("created_at", { mode: "timestamp" })
+    createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
+      .defaultNow(),
   },
   (table) => [
     uniqueIndex("contract_ad_accounts_contract_account_unique").on(
@@ -208,18 +218,18 @@ export const contractAdAccounts = sqliteTable(
 );
 
 /** Anotações/histórico do cliente. */
-export const clientNotes = sqliteTable(
+export const clientNotes = pgTable(
   "client_notes",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     clientId: integer("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
     description: text("description").notNull(),
     /** Momento do registro — automático, sem edição pela interface. */
-    createdAt: integer("created_at", { mode: "timestamp" })
+    createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
+      .defaultNow(),
   },
   (table) => [index("client_notes_client_idx").on(table.clientId)],
 );
@@ -228,10 +238,10 @@ export const clientNotes = sqliteTable(
  * Relatórios gerados por cliente. O `token` abre a versão pública em `/r/<token>`,
  * sem login — por isso o relatório não pode conter segredos.
  */
-export const reports = sqliteTable(
+export const reports = pgTable(
   "reports",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     clientId: integer("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
@@ -244,9 +254,9 @@ export const reports = sqliteTable(
      * somente daqui — nunca consulta a Meta ao abrir.
      */
     data: text("data").notNull().default("{}"),
-    createdAt: integer("created_at", { mode: "timestamp" })
+    createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
+      .defaultNow(),
   },
   (table) => [
     uniqueIndex("reports_token_unique").on(table.token),
@@ -262,11 +272,11 @@ export const reports = sqliteTable(
  * chave que já agrupava o cache em memória (conta + nível + período);
  * `atualizado:<cliente>` guarda quando aquele cliente foi atualizado.
  */
-export const metaCache = sqliteTable("meta_cache", {
+export const metaCache = pgTable("meta_cache", {
   key: text("key").primaryKey(),
   data: text("data").notNull(),
-  /** Momento da consulta à Meta, em milissegundos. */
-  updatedAt: integer("updated_at").notNull(),
+  /** Momento da consulta à Meta, em milissegundos (epoch). */
+  updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
 });
 
 /**
@@ -274,10 +284,10 @@ export const metaCache = sqliteTable("meta_cache", {
  * `amount` é sempre positivo em centavos — o sinal vem de `kind`.
  * Situação (pago / em aberto / vencido) é derivada de `paidAt` e `dueDate`.
  */
-export const financeEntries = sqliteTable(
+export const financeEntries = pgTable(
   "finance_entries",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     kind: text("kind").notNull().default("receita"),
     clientId: integer("client_id").references(() => clients.id, {
       onDelete: "set null",
@@ -300,12 +310,12 @@ export const financeEntries = sqliteTable(
     /** Competência YYYY-MM, usada só nas cobranças geradas do contrato. */
     competence: text("competence"),
     notes: text("notes"),
-    createdAt: integer("created_at", { mode: "timestamp" })
+    createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
+      .defaultNow(),
   },
   (table) => [
     index("finance_entries_due_idx").on(table.dueDate),
@@ -326,10 +336,10 @@ export const financeEntries = sqliteTable(
  * Estorno nunca apaga a linha: grava `reversed_at` para manter o histórico de
  * quem deu baixa e quando voltou atrás.
  */
-export const financePayments = sqliteTable(
+export const financePayments = pgTable(
   "finance_payments",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     entryId: integer("entry_id")
       .notNull()
       .references(() => financeEntries.id, { onDelete: "cascade" }),
@@ -342,9 +352,9 @@ export const financePayments = sqliteTable(
     notes: text("notes"),
     /** Estorno: data em que a baixa foi desfeita; nulo = vale. */
     reversedAt: text("reversed_at"),
-    createdAt: integer("created_at", { mode: "timestamp" })
+    createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
-      .default(sql`(unixepoch())`),
+      .defaultNow(),
   },
   (table) => [index("finance_payments_entry_idx").on(table.entryId)],
 );

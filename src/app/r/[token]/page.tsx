@@ -136,7 +136,7 @@ export default async function RelatorioPublicoPage({
 }) {
   const [{ token }, busca] = await Promise.all([params, searchParams]);
 
-  const relatorio = db
+  const [relatorio] = await db
     .select({
       inicio: reports.startDate,
       fim: reports.endDate,
@@ -146,12 +146,11 @@ export default async function RelatorioPublicoPage({
     })
     .from(reports)
     .innerJoin(clients, eq(clients.id, reports.clientId))
-    .where(eq(reports.token, token))
-    .get();
+    .where(eq(reports.token, token));
 
   if (!relatorio) notFound();
 
-  const { systemName, logoPath } = getSettings();
+  const { systemName, logoPath } = await getSettings();
   const periodo = `${formatDateIso(relatorio.inicio)} a ${formatDateIso(relatorio.fim)}`;
   const snapshot: RelatorioSnapshot | null = lerSnapshot(relatorio.data);
 

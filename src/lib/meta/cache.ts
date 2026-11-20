@@ -9,8 +9,8 @@
  *
  * Toda chave carrega o id da conta de anúncio (`...:<conta>:...`), então
  * limpar e medir a idade dos dados de um cliente é filtrar por essas contas.
- * A comparação é por texto (`instr`), não `LIKE`: ids de conta têm `_`, que o
- * LIKE trataria como curinga.
+ * A comparação é por substring (`position`), não `LIKE`: ids de conta têm `_`,
+ * que o LIKE trataria como curinga.
  */
 
 import { sql } from "drizzle-orm";
@@ -22,16 +22,16 @@ import { periodoAnterior, type PeriodoCampanha } from "./insights";
 export type CacheLido<T> = { valor: T; atualizadoEm: number };
 
 /** Valor guardado para a chave, ou `null` se ela nunca foi consultada. */
-export function lerCache<T>(chave: string): CacheLido<T> | null {
-  const linha = db
+export async function lerCache<T>(chave: string): Promise<CacheLido<T> | null> {
+  const [linha] = await db
     .select()
     .from(metaCache)
     .where(sql`${metaCache.key} = ${chave}`)
-    .get();
+    ;
   if (!linha) return null;
 
   try {
-    return { valor: JSON.parse(linha.data) as T, atualizadoEm: linha.updatedAt };
+    return { valor: JSON.parse(linha.data) as T, atualizadoEm: Number(linha.updatedAt) };
   } catch {
     // Linha corrompida não pode derrubar a tela: trata como ausente.
     return null;
@@ -39,13 +39,13 @@ export function lerCache<T>(chave: string): CacheLido<T> | null {
 }
 
 /** Grava o valor da chave com o momento da consulta à Meta. */
-export function gravarCache(chave: string, valor: unknown): void {
+export async function gravarCache(chave: string, valor: unknown): Promise<void> {
   const agora = Date.now();
   const data = JSON.stringify(valor);
-  db.insert(metaCache)
+  await db.insert(metaCache)
     .values({ key: chave, data, updatedAt: agora })
     .onConflictDoUpdate({ target: metaCache.key, set: { data, updatedAt: agora } })
-    .run();
+    ;
 }
 
 /** Condição "a chave é de alguma destas contas". */
@@ -53,15 +53,15 @@ function dasContas(contas: string[]) {
   const ids = contas.filter((id) => id.length > 0);
   if (!ids.length) return null;
   return ids
-    .map((id) => sql`instr(${metaCache.key}, ${`:${id}:`}) > 0`)
+    .map((id) => sql`position(${`:${id}:`} in ${metaCache.key}) > 0`)
     .reduce((a, b) => sql`${a} or ${b}`);
 }
 
 /** Apaga tudo que foi guardado para as contas informadas. */
-export function limparCacheDasContas(contas: string[]): void {
+export async function limparCacheDasContas(contas: string[]): Promise<void> {
   const condicao = dasContas(contas);
   if (!condicao) return;
-  db.delete(metaCache).where(condicao).run();
+  await db.delete(metaCache).where(condicao);
 }
 
 /**
@@ -75,7 +75,7 @@ export function limparCacheDasContas(contas: string[]): void {
  * `chaves` são as chaves exatas do nível que está aberto (campanhas,
  * conjuntos ou anúncios). Nenhuma delas guardada = nunca atualizado.
  */
-export function atualizacaoDeChaves(chaves: string[]): number | null {
+export async function atualizacaoDeChaves(chaves: string[]): Promise<number | null> {
   const validas = chaves.filter((chave) => chave.length > 0);
   if (!validas.length) return null;
 
@@ -83,12 +83,13 @@ export function atualizacaoDeChaves(chaves: string[]): number | null {
     .map((chave) => sql`${metaCache.key} = ${chave}`)
     .reduce((a, b) => sql`${a} or ${b}`);
 
-  const linha = db
-    .select({ updatedAt: sql<number | null>`min(${metaCache.updatedAt})` })
+  const [linha] = await db
+    .select({ updatedAt: sql<string | null>`min(${metaCache.updatedAt})` })
     .from(metaCache)
     .where(condicao)
-    .get();
-  return linha?.updatedAt ?? null;
+    ;
+  const ms = linha?.updatedAt ? new Date(linha.updatedAt).getTime() : null;
+  return ms && Number.isFinite(ms) ? ms : null;
 }
 
 /**

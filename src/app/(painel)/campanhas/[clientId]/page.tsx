@@ -56,7 +56,7 @@ export default async function CampanhasDoClientePage({
   if (!cliente) notFound();
 
   const hoje = hojeIso();
-  if (situacaoCobranca(id, hoje.slice(0, 7)).bloqueado) {
+  if ((await situacaoCobranca(id, hoje.slice(0, 7))).bloqueado) {
     return (
       <div className="space-y-6">
         <CabecalhoCampanhas
@@ -75,7 +75,7 @@ export default async function CampanhasDoClientePage({
   }
 
   const contas = await contasDoCliente(cliente.contracts);
-  const token = getMetaToken();
+  const token = await getMetaToken();
   const query = `?periodo=${periodo}&status=${status}${personalizado ? `&de=${personalizado.since}&ate=${personalizado.until}` : ""}`;
 
   // Horário do render no servidor: o relógio do botão parte daqui.
@@ -86,7 +86,7 @@ export default async function CampanhasDoClientePage({
     : { estado: { estado: "sem-token" as const }, linhas: [], contas };
 
   const metricas = somarMetricas(resultado.linhas);
-  const ultimaAtualizacao = atualizacaoDeChaves(
+  const ultimaAtualizacao = await atualizacaoDeChaves(
     chavesDeCampanhas(idsParaCache(contas), periodo, personalizado),
   );
 

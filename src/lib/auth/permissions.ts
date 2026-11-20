@@ -60,12 +60,12 @@ export type AuthorizedUser = SessionUser & {
   permissions: PermissionSet;
 };
 
-/** Sempre lê estado atual do SQLite; não usa role/ACL potencialmente stale no JWT. */
+/** Sempre lê o estado atual do banco; não usa role/ACL potencialmente stale no JWT. */
 export async function getAuthorizedUser(): Promise<AuthorizedUser | null> {
   const session = await getSession();
   if (!session) return null;
 
-  const row = db.select().from(users).where(eq(users.id, session.id)).get();
+  const [row] = await db.select().from(users).where(eq(users.id, session.id));
   if (!row?.active) return null;
 
   return {

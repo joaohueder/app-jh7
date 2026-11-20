@@ -89,12 +89,12 @@ export default async function CampanhasPage({
     periodo === "custom"
       ? intervaloPersonalizado(params.de, params.ate)
       : null;
-  const token = getMetaToken();
+  const token = await getMetaToken();
 
   const clientes = await listClientsWithContracts();
   const { nichos } = await listNiches();
   const mesAtual = hojeIso().slice(0, 7);
-  const bloqueados = clientesBloqueados(
+  const bloqueados = await clientesBloqueados(
     clientes.map((c) => c.id),
     mesAtual,
   );
@@ -137,7 +137,7 @@ export default async function CampanhasPage({
 
   // Idade do dado em tela: o carimbo mais antigo entre as contas, no período
   // exibido. Atualização parcial não pode fazer dado velho parecer novo.
-  const ultimaAtualizacao = atualizacaoDeChaves(
+  const ultimaAtualizacao = await atualizacaoDeChaves(
     chavesDeCampanhas(
       resumos.flatMap((r) => idsParaCache(r.contas)),
       periodo,

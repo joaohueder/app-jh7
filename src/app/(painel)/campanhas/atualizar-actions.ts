@@ -56,7 +56,7 @@ export async function atualizarCampanhas(input: {
     return { message: "Você não tem permissão para atualizar as campanhas." };
   }
 
-  const token = getMetaToken();
+  const token = await getMetaToken();
   if (!token) {
     return { message: "Configure o token da Meta em Configurações → Meta Ads." };
   }

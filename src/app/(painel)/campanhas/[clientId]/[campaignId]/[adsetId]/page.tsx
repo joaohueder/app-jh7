@@ -56,7 +56,7 @@ export default async function AnunciosPage({
   if (!cliente) notFound();
 
   const hoje = hojeIso();
-  if (situacaoCobranca(id, hoje.slice(0, 7)).bloqueado) {
+  if ((await situacaoCobranca(id, hoje.slice(0, 7))).bloqueado) {
     return (
       <div className="space-y-6">
         <CabecalhoCampanhas
@@ -69,7 +69,7 @@ export default async function AnunciosPage({
   }
 
   const contas = await contasDoCliente(cliente.contracts);
-  const token = getMetaToken();
+  const token = await getMetaToken();
 
   const campanhas = token
     ? await campanhasDoCliente(contas, periodo, "all", token, personalizado)
@@ -108,7 +108,7 @@ export default async function AnunciosPage({
   const agoraInicial = agoraDoServidor();
 
   const metricas = somarMetricas(resultado.linhas);
-  const ultimaAtualizacao = atualizacaoDeChaves(
+  const ultimaAtualizacao = await atualizacaoDeChaves(
     chavesDeAnuncios(
       idsParaCache(contas)[0] ?? "",
       adsetId,

@@ -55,7 +55,7 @@ export async function criarRelatorioAction(
     .select({ id: clients.id })
     .from(clients)
     .where(eq(clients.id, parsed.data.clientId))
-    .get();
+    ;
   if (!cliente) return { erro: "Cliente não encontrado." };
 
   // Consulta a Meta só aqui, na geração; a página pública lê este snapshot.
@@ -66,7 +66,7 @@ export async function criarRelatorioAction(
   );
   if (!gerado.ok) return { erro: gerado.message };
 
-  db.insert(reports)
+  await db.insert(reports)
     .values({
       clientId: parsed.data.clientId,
       startDate: parsed.data.inicio,
@@ -74,7 +74,7 @@ export async function criarRelatorioAction(
       token: novoToken(),
       data: JSON.stringify(gerado.snapshot),
     })
-    .run();
+    ;
 
   revalidatePath(`/relatorios/${parsed.data.clientId}`);
   return { ok: true, message: "Relatório gerado." };
@@ -92,11 +92,10 @@ export async function regerarRelatorioAction(
     return { erro: "Você não tem permissão para gerar relatórios." };
   }
 
-  const atual = db
+  const [atual] = await db
     .select()
     .from(reports)
-    .where(and(eq(reports.id, reportId), eq(reports.clientId, clientId)))
-    .get();
+    .where(and(eq(reports.id, reportId), eq(reports.clientId, clientId)));
   if (!atual) return { erro: "Relatório não encontrado." };
 
   const gerado = await gerarSnapshotRelatorio(
@@ -106,10 +105,10 @@ export async function regerarRelatorioAction(
   );
   if (!gerado.ok) return { erro: gerado.message };
 
-  db.update(reports)
+  await db.update(reports)
     .set({ data: JSON.stringify(gerado.snapshot) })
     .where(eq(reports.id, reportId))
-    .run();
+    ;
 
   revalidatePath(`/relatorios/${clientId}`);
   revalidatePath(`/r/${atual.token}`);
@@ -124,9 +123,9 @@ export async function excluirRelatorioAction(
     return { erro: "Você não tem permissão para excluir relatórios." };
   }
 
-  db.delete(reports)
+  await db.delete(reports)
     .where(and(eq(reports.id, reportId), eq(reports.clientId, clientId)))
-    .run();
+    ;
 
   revalidatePath(`/relatorios/${clientId}`);
   return { ok: true, message: "Relatório excluído." };

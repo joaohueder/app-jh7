@@ -18,19 +18,16 @@ export type SituacaoCobranca = {
   bloqueado: boolean;
 };
 
-export function situacaoCobranca(
+export async function situacaoCobranca(
   clientId: number,
   mes: string,
-): SituacaoCobranca {
-  const temContratoAtivo = Boolean(
-    db
+): Promise<SituacaoCobranca> {
+  const [contrato] = await db
       .select({ id: contracts.id })
       .from(contracts)
-      .where(and(eq(contracts.clientId, clientId), eq(contracts.status, "active")))
-      .get(),
-  );
+      .where(and(eq(contracts.clientId, clientId), eq(contracts.status, "active")));
 
-  const lancada = db
+  const [lancada] = await db
     .select({ id: financeEntries.id })
     .from(financeEntries)
     .where(
@@ -39,7 +36,9 @@ export function situacaoCobranca(
         eq(financeEntries.competence, mes),
       ),
     )
-    .get();
+    ;
+
+  const temContratoAtivo = Boolean(contrato);
 
   return {
     temContratoAtivo,
@@ -49,27 +48,25 @@ export function situacaoCobranca(
 }
 
 /** Versão para listas: devolve os ids bloqueados de uma vez. */
-export function clientesBloqueados(
+export async function clientesBloqueados(
   clientIds: number[],
   mes: string,
-): Set<number> {
+): Promise<Set<number>> {
   if (clientIds.length === 0) return new Set();
 
   const comContrato = new Set(
-    db
+    (await db
       .select({ clientId: contracts.clientId })
       .from(contracts)
-      .where(eq(contracts.status, "active"))
-      .all()
+      .where(eq(contracts.status, "active")))
       .map((c) => c.clientId),
   );
 
   const lancados = new Set(
-    db
+    (await db
       .select({ clientId: financeEntries.clientId })
       .from(financeEntries)
-      .where(eq(financeEntries.competence, mes))
-      .all()
+      .where(eq(financeEntries.competence, mes)))
       .map((l) => l.clientId)
       .filter((id): id is number => id !== null),
   );

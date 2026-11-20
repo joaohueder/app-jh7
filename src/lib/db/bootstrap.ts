@@ -28,15 +28,15 @@ export async function garantirAdministrador(): Promise<void> {
     return;
   }
 
-  const { total } = db.select({ total: count() }).from(users).get() ?? { total: 0 };
-  if (total > 0) return;
+  const [linha] = await db.select({ total: count() }).from(users);
+  if ((linha?.total ?? 0) > 0) return;
 
   const permissions = Object.fromEntries(
     PERMISSION_MODULES.map((modulo) => [modulo, [...PERMISSION_ACTIONS]]),
   );
 
   const passwordHash = await bcrypt.hash(senha, 12);
-  const criado = db
+  const [criado] = await db
     .insert(users)
     .values({
       name: process.env.ADMIN_NAME?.trim() || "Administrador",
@@ -46,21 +46,23 @@ export async function garantirAdministrador(): Promise<void> {
       permissions,
       active: true,
     })
-    .returning()
-    .get();
+    .returning();
 
   console.log(`[db] administrador criado: ${criado.email}`);
 }
 
 /** Configurações padrão que a UI espera encontrar. */
-export function garantirConfiguracoes(): void {
+export async function garantirConfiguracoes(): Promise<void> {
   const padroes: Record<string, string> = {
     system_name: "JH7 Marketing",
     logo_path: "",
   };
 
   for (const [key, value] of Object.entries(padroes)) {
-    const existe = db.select().from(settings).where(eq(settings.key, key)).get();
-    if (!existe) db.insert(settings).values({ key, value }).run();
+    const [existe] = await db
+      .select({ key: settings.key })
+      .from(settings)
+      .where(eq(settings.key, key));
+    if (!existe) await db.insert(settings).values({ key, value });
   }
 }

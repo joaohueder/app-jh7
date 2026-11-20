@@ -52,7 +52,7 @@ export default async function ConjuntosPage({
   if (!cliente) notFound();
 
   const hoje = hojeIso();
-  if (situacaoCobranca(id, hoje.slice(0, 7)).bloqueado) {
+  if ((await situacaoCobranca(id, hoje.slice(0, 7))).bloqueado) {
     return (
       <div className="space-y-6">
         <CabecalhoCampanhas
@@ -65,7 +65,7 @@ export default async function ConjuntosPage({
   }
 
   const contas = await contasDoCliente(cliente.contracts);
-  const token = getMetaToken();
+  const token = await getMetaToken();
 
   // A campanha precisa pertencer a uma das contas deste cliente.
   const campanhas = token
@@ -90,7 +90,7 @@ export default async function ConjuntosPage({
   const agoraInicial = agoraDoServidor();
 
   const metricas = somarMetricas(resultado.linhas);
-  const ultimaAtualizacao = atualizacaoDeChaves(
+  const ultimaAtualizacao = await atualizacaoDeChaves(
     chavesDeConjuntos(idsParaCache(contas), campaignId, "all", periodo, personalizado),
   );
 

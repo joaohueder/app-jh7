@@ -64,7 +64,7 @@ function primeiroNome(nome: string): string {
 
 export default async function PainelPage() {
   const user = await requireUser();
-  const dados = dadosDoPainel(hojeIso());
+  const dados = await dadosDoPainel(hojeIso());
 
   const hoje = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",

@@ -83,7 +83,7 @@ export async function createFinanceEntryAction(
     return { erro: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  db.insert(financeEntries).values(parsed.data).run();
+  await db.insert(financeEntries).values(parsed.data);
   refresh();
   return { ok: true, message: "Lançamento criado." };
 }
@@ -104,10 +104,10 @@ export async function updateFinanceEntryAction(
     return { erro: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  db.update(financeEntries)
+  await db.update(financeEntries)
     .set({ ...parsed.data, updatedAt: new Date() })
     .where(eq(financeEntries.id, id))
-    .run();
+    ;
   refresh();
   return { ok: true, message: "Lançamento atualizado." };
 }
@@ -117,7 +117,7 @@ export async function excluirLancamentoAction(id: number): Promise<FinanceState>
     return { erro: "Você não tem permissão para excluir lançamentos." };
   }
 
-  db.delete(financeEntries).where(eq(financeEntries.id, id)).run();
+  await db.delete(financeEntries).where(eq(financeEntries.id, id));
   refresh();
   return { ok: true, message: "Lançamento excluído." };
 }
@@ -143,13 +143,14 @@ const baixaSchema = z.object({
 });
 
 /** Quanto já foi baixado (baixas válidas) de um lançamento. */
-function totalBaixado(entryId: number): number {
-  return db
+async function totalBaixado(entryId: number): Promise<number> {
+  const baixas = await db
     .select()
     .from(financePayments)
-    .where(and(eq(financePayments.entryId, entryId), isNull(financePayments.reversedAt)))
-    .all()
-    .reduce((total, b) => total + b.amount, 0);
+    .where(
+      and(eq(financePayments.entryId, entryId), isNull(financePayments.reversedAt)),
+    );
+  return baixas.reduce((total, b) => total + b.amount, 0);
 }
 
 /**
@@ -168,14 +169,13 @@ export async function baixarLancamentoAction(
     return { erro: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  const lancamento = db
+  const [lancamento] = await db
     .select()
     .from(financeEntries)
-    .where(eq(financeEntries.id, parsed.data.entryId))
-    .get();
+    .where(eq(financeEntries.id, parsed.data.entryId));
   if (!lancamento) return { erro: "Lançamento não encontrado." };
 
-  const saldo = lancamento.amount - totalBaixado(lancamento.id);
+  const saldo = lancamento.amount - (await totalBaixado(lancamento.id));
   if (saldo <= 0) return { erro: "Este lançamento já está quitado." };
 
   const valor = parsed.data.amount > 0 ? parsed.data.amount : saldo;
@@ -183,7 +183,7 @@ export async function baixarLancamentoAction(
     return { erro: "O valor informado é maior que o saldo em aberto." };
   }
 
-  db.insert(financePayments)
+  await db.insert(financePayments)
     .values({
       entryId: lancamento.id,
       amount: valor,
@@ -191,7 +191,7 @@ export async function baixarLancamentoAction(
       method: parsed.data.method,
       notes: parsed.data.notes,
     })
-    .run();
+    ;
   refresh();
   return {
     ok: true,
@@ -205,18 +205,17 @@ export async function estornarBaixaAction(baixaId: number): Promise<FinanceState
     return { erro: "Você não tem permissão para estornar pagamentos." };
   }
 
-  const baixa = db
+  const [baixa] = await db
     .select()
     .from(financePayments)
-    .where(eq(financePayments.id, baixaId))
-    .get();
+    .where(eq(financePayments.id, baixaId));
   if (!baixa) return { erro: "Baixa não encontrada." };
   if (baixa.reversedAt) return { erro: "Esta baixa já foi estornada." };
 
-  db.update(financePayments)
+  await db.update(financePayments)
     .set({ reversedAt: new Date().toISOString().slice(0, 10) })
     .where(eq(financePayments.id, baixaId))
-    .run();
+    ;
   refresh();
   return { ok: true, message: "Pagamento estornado." };
 }
@@ -234,14 +233,17 @@ type ContratoCobravel = {
  * Lança a mensalidade de um contrato no mês. Devolve `false` quando não há o
  * que gerar (valor zero, contrato sem dia de vencimento ou já lançado).
  */
-function lancarMensalidade(contrato: ContratoCobravel, mes: string): boolean {
+async function lancarMensalidade(
+  contrato: ContratoCobravel,
+  mes: string,
+): Promise<boolean> {
   // Valor zero é gerado do mesmo jeito: a parcela existe (e libera o acesso),
   // só não soma no financeiro.
   // Sem dia de vencimento definido o contrato não entra em cobrança — quem
   // garante a data é o cadastro, não um palpite do sistema.
   if (!contrato.dueDay) return false;
 
-  const existente = db
+  const [existente] = await db
     .select({ id: financeEntries.id })
     .from(financeEntries)
     .where(
@@ -249,11 +251,10 @@ function lancarMensalidade(contrato: ContratoCobravel, mes: string): boolean {
         eq(financeEntries.contractId, contrato.id),
         eq(financeEntries.competence, mes),
       ),
-    )
-    .get();
+    );
   if (existente) return false;
 
-  db.insert(financeEntries)
+  await db.insert(financeEntries)
     .values({
       kind: "receita",
       clientId: contrato.clientId,
@@ -264,12 +265,12 @@ function lancarMensalidade(contrato: ContratoCobravel, mes: string): boolean {
       dueDate: vencimentoDaMensalidade(contrato.inicio, mes, contrato.dueDay),
       competence: mes,
     })
-    .run();
+    ;
   return true;
 }
 
 /** Contratos ativos que podem entrar na cobrança do mês. */
-function contratosCobraveis(): ContratoCobravel[] {
+async function contratosCobraveis(): Promise<ContratoCobravel[]> {
   return db
     .select({
       id: contracts.id,
@@ -288,7 +289,7 @@ function contratosCobraveis(): ContratoCobravel[] {
         isNotNull(contracts.dueDay),
       ),
     )
-    .all();
+    ;
 }
 
 /**
@@ -303,12 +304,12 @@ export async function gerarCobrancasAction(mes: string): Promise<
   }
   if (!/^\d{4}-\d{2}$/.test(mes)) return { erro: "Mês inválido." };
 
-  const ativos = contratosCobraveis();
+  const ativos = await contratosCobraveis();
   let criadas = 0;
   let puladas = 0;
 
   for (const contrato of ativos) {
-    if (lancarMensalidade(contrato, mes)) criadas += 1;
+    if (await lancarMensalidade(contrato, mes)) criadas += 1;
     else puladas += 1;
   }
 
@@ -334,14 +335,14 @@ export async function gerarCobrancaDoContratoAction(
   }
   if (!/^\d{4}-\d{2}$/.test(mes)) return { erro: "Mês inválido." };
 
-  const contrato = contratosCobraveis().find((c) => c.id === contratoId);
+  const contrato = (await contratosCobraveis()).find((c) => c.id === contratoId);
   if (!contrato) {
     return {
       erro: "Contrato sem dia de vencimento definido não pode ser cobrado.",
     };
   }
 
-  if (!lancarMensalidade(contrato, mes)) {
+  if (!(await lancarMensalidade(contrato, mes))) {
     return { erro: "Esta cobrança já foi gerada." };
   }
 

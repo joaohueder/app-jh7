@@ -1,1 +1,0 @@
-ALTER TABLE `contracts` ADD `due_day` integer;

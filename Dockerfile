@@ -29,8 +29,8 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-# Banco e uploads fora da imagem, num volume — atualizar o sistema não apaga
-# os dados. Aponte o volume do painel para /data.
+# Uploads fora da imagem, num volume — atualizar o sistema não apaga os
+# arquivos. O banco vem de DATABASE_URL (Postgres gerenciado).
 ENV DATA_DIR=/data
 
 RUN addgroup --system --gid 1001 nodejs \

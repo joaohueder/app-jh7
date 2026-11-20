@@ -2,7 +2,7 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 
-import { db } from "../src/lib/db";
+import { db, pool } from "../src/lib/db";
 import { settings, users } from "../src/lib/db/schema";
 import { ALL_PERMISSIONS } from "../src/lib/auth/permissions";
 
@@ -13,28 +13,25 @@ const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "joaohueder@gmail.com")
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "123456";
 
 async function main() {
-  const existing = db
+  const [existing] = await db
     .select()
     .from(users)
-    .where(eq(users.email, ADMIN_EMAIL))
-    .get();
+    .where(eq(users.email, ADMIN_EMAIL));
 
   if (existing) {
-    if (existing.role === "admin") {
-      db.update(users)
-        .set({ permissions: ALL_PERMISSIONS, active: true, updatedAt: new Date() })
-        .where(eq(users.id, existing.id))
-        .run();
-    } else {
-      db.update(users)
-        .set({ role: "admin", permissions: ALL_PERMISSIONS, active: true, updatedAt: new Date() })
-        .where(eq(users.id, existing.id))
-        .run();
-    }
+    await db
+      .update(users)
+      .set({
+        role: "admin",
+        permissions: ALL_PERMISSIONS,
+        active: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, existing.id));
     console.log(`✓ Usuário ${ADMIN_EMAIL} já existe (id ${existing.id}).`);
   } else {
     const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
-    const created = db
+    const [created] = await db
       .insert(users)
       .values({
         name: ADMIN_NAME,
@@ -44,8 +41,7 @@ async function main() {
         permissions: ALL_PERMISSIONS,
         active: true,
       })
-      .returning()
-      .get();
+      .returning();
     console.log(`✓ Administrador criado: ${created.email} (id ${created.id}).`);
   }
 
@@ -55,9 +51,9 @@ async function main() {
   };
 
   for (const [key, value] of Object.entries(defaults)) {
-    const row = db.select().from(settings).where(eq(settings.key, key)).get();
+    const [row] = await db.select().from(settings).where(eq(settings.key, key));
     if (!row) {
-      db.insert(settings).values({ key, value }).run();
+      await db.insert(settings).values({ key, value });
       console.log(`✓ Configuração padrão criada: ${key}`);
     }
   }
@@ -65,7 +61,9 @@ async function main() {
   console.log("Seed concluído.");
 }
 
-main().catch((error) => {
-  console.error("Falha no seed:", error);
-  process.exit(1);
-});
+main()
+  .catch((error) => {
+    console.error("Falha no seed:", error);
+    process.exitCode = 1;
+  })
+  .finally(() => pool.end());

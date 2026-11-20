@@ -26,14 +26,19 @@ export const metadata: Metadata = {
   },
 };
 
+// O layout lê o nome do sistema no banco. Forçar renderização por requisição
+// evita que `next build` tente consultar o banco (que não existe na imagem de
+// build) ao prerenderizar as páginas.
+export const dynamic = "force-dynamic";
+
 export const viewport: Viewport = {
   themeColor: "#0a0a0a",
   width: "device-width",
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
-  const { systemName } = getSettings();
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const { systemName } = await getSettings();
 
   return (
     <html

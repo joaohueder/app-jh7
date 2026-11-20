@@ -111,14 +111,14 @@ function diasAte(iso: string, hoje: string): number {
 }
 
 /**
- * Dados do painel. Tudo vem do SQLite — nada de rede aqui, para a tela abrir
+ * Dados do painel. Tudo vem do banco — nada de rede aqui, para a tela abrir
  * rápido e continuar útil com a Meta fora do ar.
  */
-export function dadosDoPainel(hoje: string): PainelFinanceiro {
+export async function dadosDoPainel(hoje: string): Promise<PainelFinanceiro> {
   const mes = hoje.slice(0, 7);
   const { inicio, fim } = intervaloDoMes(mes);
 
-  const lancamentos = db
+  const lancamentos = await db
     .select({
       id: financeEntries.id,
       kind: financeEntries.kind,
@@ -131,15 +131,13 @@ export function dadosDoPainel(hoje: string): PainelFinanceiro {
       contractId: financeEntries.contractId,
     })
     .from(financeEntries)
-    .leftJoin(clients, eq(clients.id, financeEntries.clientId))
-    .all();
+    .leftJoin(clients, eq(clients.id, financeEntries.clientId));
 
   // Baixas válidas (não estornadas), agrupadas por lançamento.
-  const baixas = db
+  const baixas = await db
     .select()
     .from(financePayments)
-    .where(isNull(financePayments.reversedAt))
-    .all();
+    .where(isNull(financePayments.reversedAt));
   const baixadoPor = new Map<number, number>();
   for (const b of baixas) {
     baixadoPor.set(b.entryId, (baixadoPor.get(b.entryId) ?? 0) + b.amount);
@@ -181,7 +179,8 @@ export function dadosDoPainel(hoje: string): PainelFinanceiro {
 
   /* ---------------- contratos e parcelas do mês ---------------- */
 
-  const contratosAtivos = db
+  const contratosAtivos = (
+    await db
     .select({
       id: contracts.id,
       nome: contracts.name,
@@ -193,8 +192,7 @@ export function dadosDoPainel(hoje: string): PainelFinanceiro {
     })
     .from(contracts)
     .innerJoin(clients, eq(clients.id, contracts.clientId))
-    .where(eq(contracts.status, "active"))
-    .all()
+    .where(eq(contracts.status, "active")))
     // Só entra em cobrança o contrato com dia de vencimento definido; valor
     // zero também gera parcela (é o que libera o acesso aos módulos).
     .filter((c) => c.dueDay !== null);
@@ -219,7 +217,7 @@ export function dadosDoPainel(hoje: string): PainelFinanceiro {
 
   const mrr = contratosAtivos.reduce((t, c) => t + c.valor, 0);
 
-  const todosContratosAtivos = db
+  const todosContratosAtivos = await db
     .select({
       id: contracts.id,
       nome: contracts.name,
@@ -229,8 +227,7 @@ export function dadosDoPainel(hoje: string): PainelFinanceiro {
     })
     .from(contracts)
     .innerJoin(clients, eq(clients.id, contracts.clientId))
-    .where(eq(contracts.status, "active"))
-    .all();
+    .where(eq(contracts.status, "active"));
 
   const contratosSemDia = todosContratosAtivos
     .filter((c) => c.dueDay === null)
@@ -258,15 +255,14 @@ export function dadosDoPainel(hoje: string): PainelFinanceiro {
 
   /* ---------------- clientes ---------------- */
 
-  const todosClientes = db.select().from(clients).all();
+  const todosClientes = await db.select().from(clients);
   const clientesAtivos = todosClientes.filter((c) => c.active).length;
   const clientesInativos = todosClientes.length - clientesAtivos;
 
-  const listaNichos = db
+  const listaNichos = await db
     .select({ id: niches.id, nome: niches.name, position: niches.position })
     .from(niches)
-    .orderBy(asc(niches.position), asc(niches.name))
-    .all();
+    .orderBy(asc(niches.position), asc(niches.name));
   const nichosComContagem = listaNichos
     .map((n) => ({
       nome: n.nome,
@@ -301,7 +297,8 @@ export function dadosDoPainel(hoje: string): PainelFinanceiro {
   limite.setUTCDate(limite.getUTCDate() + 7);
   const limiteIso = limite.toISOString().slice(0, 10);
 
-  const proximosVencimentos = db
+  const proximosVencimentos = (
+    await db
     .select({
       id: financeEntries.id,
       descricao: financeEntries.description,
@@ -318,8 +315,7 @@ export function dadosDoPainel(hoje: string): PainelFinanceiro {
         lte(financeEntries.dueDate, limiteIso),
       ),
     )
-    .orderBy(asc(financeEntries.dueDate))
-    .all()
+    .orderBy(asc(financeEntries.dueDate)))
     // Pago não entra: o que interessa aqui é o que ainda falta receber. O
     // saldo vem das baixas, não do `paid_at` antigo.
     .map((l) => ({
