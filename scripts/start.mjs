@@ -1,48 +1,101 @@
 /**
- * Sobe o servidor de produção — e constrói o pacote se ele ainda não existir.
+ * Sobe o servidor de produção atrás de um proxy que abre a porta na hora.
  *
- * Dois problemas reais de painel estão resolvidos aqui:
+ * O painel roda `npm ci` → inicia o app → consulta `/health` poucos segundos
+ * depois. Se a porta ainda não estiver aberta nesse instante, o smoke test
+ * falha com `connection refused` e o deploy é revertido — mesmo quando o app
+ * fica perfeito dois segundos depois.
  *
- * 1. **Build ausente.** Alguns painéis rodam `npm ci` e vão direto para o
- *    `start`, sem etapa de build. Sem `.next/standalone` o processo morria com
- *    "server.js não encontrado". Agora o `start` roda o build na primeira vez
- *    (e só quando falta o pacote).
+ * Aqui a porta externa (PORT) é aberta **antes de tudo**: enquanto o banco é
+ * testado e, se preciso, enquanto o build roda, a resposta é 503 "iniciando".
+ * O Next escuta numa porta interna e o proxy repassa. Só quando o Next está
+ * aceitando conexões o proxy passa a encaminhar de verdade.
  *
- * 2. **HOSTNAME do container.** Docker define `HOSTNAME` com o ID do container
- *    e o `server.js` do Next faz `process.env.HOSTNAME || '0.0.0.0'`. Escutando
- *    em `abc123def456:3000`, o proxy não conecta e a resposta é 502 sem log.
- *    O `HOSTNAME` é forçado aqui, antes de carregar o servidor.
+ * Também força `HOSTNAME=0.0.0.0` no filho: Docker define `HOSTNAME` com o ID
+ * do container e o server.js do Next usa esse valor, escutando num endereço
+ * que o proxy não alcança.
  */
 import { spawn } from "node:child_process";
+import { createServer, request } from "node:http";
 import { existsSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
 const raiz = process.cwd();
 
 process.env.NODE_ENV ??= "production";
-// Mesma regra do Dockerfile e do painel: escutar em todas as interfaces.
 process.env.HOSTNAME = "0.0.0.0";
-process.env.PORT ??= "3000";
+
+const PORTA_EXTERNA = Number(process.env.PORT ?? 3000);
+const PORTA_INTERNA = PORTA_EXTERNA + 1;
+
+const pacote = path.join(raiz, ".next", "standalone", "server.js");
+const local = path.join(raiz, "server.js");
+
+let pronto = false;
+let estado = "iniciando";
+
+/* ------------------------------------------------------------------ */
+/* Porta externa: responde sempre, nunca "connection refused"          */
+/* ------------------------------------------------------------------ */
+
+const proxy = createServer((req, res) => {
+  if (!pronto) {
+    res.writeHead(503, {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      "Retry-After": "5",
+    });
+    res.end(
+      JSON.stringify({
+        ok: false,
+        estado,
+        dica: "O servidor ainda está subindo. Repita em alguns segundos.",
+      }),
+    );
+    return;
+  }
+
+  const encaminhado = request(
+    {
+      host: "127.0.0.1",
+      port: PORTA_INTERNA,
+      path: req.url,
+      method: req.method,
+      headers: { ...req.headers, host: req.headers.host ?? "localhost" },
+    },
+    (resposta) => {
+      res.writeHead(resposta.statusCode ?? 502, resposta.headers);
+      resposta.pipe(res);
+    },
+  );
+  encaminhado.on("error", (erro) => {
+    res.writeHead(502, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: false, erro: erro.message }));
+  });
+  req.pipe(encaminhado);
+});
+
+proxy.listen(PORTA_EXTERNA, "0.0.0.0", () => {
+  console.log(`[start] porta ${PORTA_EXTERNA} aberta (proxy)`);
+});
+
+/* ------------------------------------------------------------------ */
+/* Banco: escolhe o endereço antes do Next carregar                    */
+/* ------------------------------------------------------------------ */
 
 /**
- * Escolhe o endereço do banco antes de o Next carregar.
- *
  * O mesmo Postgres costuma ter dois endereços: um IP público (sujeito a
  * allowlist do provedor) e um hostname interno (só resolve de dentro dele).
- * Onde o IP não estiver liberado, o app morre na migração no boot.
- *
- * `DATABASE_URL_FALLBACK` é tentado quando o principal não abre a porta em 5s.
- * A escolha precisa ocorrer aqui: depois de carregado, o Drizzle já guardou a
- * referência do pool e trocar em execução não tem efeito.
+ * Onde o IP não está liberado, o app morre na migração no boot — daí o
+ * `DATABASE_URL_FALLBACK`.
  */
-async function testarPorta(url) {
+function testarPorta(url) {
   let alvo;
   try {
     alvo = new URL(url);
   } catch {
-    return false;
+    return Promise.resolve(false);
   }
   return new Promise((resolver) => {
     const socket = net.connect({
@@ -69,25 +122,17 @@ const principal = process.env.DATABASE_URL;
 const alternativo = process.env.DATABASE_URL_FALLBACK;
 
 if (principal && alternativo && !(await testarPorta(principal))) {
-  console.warn(`[start] banco principal inacessível; usando o alternativo`);
+  console.log("[start] banco principal inacessível; usando o alternativo");
   process.env.DATABASE_URL = alternativo;
 }
 
-const pacote = path.join(raiz, ".next", "standalone", "server.js");
-const local = path.join(raiz, "server.js");
+/* ------------------------------------------------------------------ */
+/* Build: só quando o pacote não corresponde ao código                 */
+/* ------------------------------------------------------------------ */
 
-/**
- * Roda `next build` quando o pacote standalone não existe.
- *
- * `npm run build` em vez de `next build` para o `postbuild` rodar junto (é ele
- * que copia public/, .next/static, drizzle/ e .env.production). stdio "inherit"
- * para o log do painel mostrar cada linha.
- *
- * Assíncrono (`spawn`, não `spawnSync`): o build leva ~1 min e bloquear o event
- * loop impediria o servidor provisório de aceitar conexão enquanto isso.
- */
 function construir() {
   console.log("[start] pacote standalone ausente — rodando `npm run build`...");
+  estado = "build em andamento";
   return new Promise((resolver) => {
     const filho = spawn("npm", ["run", "build"], {
       stdio: "inherit",
@@ -109,50 +154,64 @@ function construir() {
   });
 }
 
-// O smoke test do painel dispara poucos segundos após "Iniciando aplicação".
-// Com o build pendente ele encontraria a porta fechada e aplicaria rollback.
-// Um servidor mínimo na porta já responde `/health` como "preparando" (503)
-// enquanto o build roda — o proxy devolve resposta em vez de recusar conexão.
-const precisaBuild = !existsSync(pacote) && !existsSync(local);
-let provisorio = null;
-
-if (precisaBuild) {
-  const { createServer } = await import("node:http");
-  provisorio = createServer((_req, res) => {
-    res.writeHead(503, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: false, estado: "build em andamento" }));
-  });
-  provisorio.listen(Number(process.env.PORT), "0.0.0.0", () => {
-    console.log(`[start] build em andamento — respondendo 503 na porta ${process.env.PORT}`);
-  });
-  provisorio.on("error", () => {
-    // Porta ocupada: o build ainda pode terminar; não impede o fluxo.
-    provisorio = null;
-  });
-
+if (!existsSync(pacote) && !existsSync(local)) {
   const montou = await construir();
-  if (!montou) {
-    provisorio?.close();
-    process.exit(1);
-  }
+  if (!montou) process.exit(1);
 }
 
 const alvo = [pacote, local].find((arquivo) => existsSync(arquivo));
 if (!alvo) {
   console.error(
     "[start] build terminou mas .next/standalone/server.js não foi gerado. " +
-      "Confira se next.config.ts tem `output: \"standalone\"`.",
+      'Confira se next.config.ts tem `output: "standalone"`.',
   );
-  provisorio?.close();
   process.exit(1);
 }
 
-// Libera a porta para o servidor real do Next.
-if (provisorio) {
-  await new Promise((resolver) => provisorio.close(resolver));
-  provisorio = null;
+/* ------------------------------------------------------------------ */
+/* Next na porta interna; proxy passa a encaminhar quando ele aceitar  */
+/* ------------------------------------------------------------------ */
+
+estado = "subindo o servidor";
+const servidor = spawn(process.execPath, [alvo], {
+  stdio: "inherit",
+  env: {
+    ...process.env,
+    PORT: String(PORTA_INTERNA),
+    HOSTNAME: "0.0.0.0",
+  },
+});
+
+servidor.on("exit", (codigo) => {
+  console.error(`[start] servidor encerrou (código ${codigo})`);
+  proxy.close();
+  process.exit(codigo ?? 1);
+});
+
+/** Espera a porta interna aceitar conexões; depois libera o proxy. */
+async function aguardarServidor() {
+  const limite = Date.now() + 120_000;
+  while (Date.now() < limite) {
+    const aberto = await new Promise((resolver) => {
+      const socket = net.connect({ host: "127.0.0.1", port: PORTA_INTERNA });
+      socket.once("connect", () => {
+        socket.destroy();
+        resolver(true);
+      });
+      socket.once("error", () => {
+        socket.destroy();
+        resolver(false);
+      });
+    });
+    if (aberto) {
+      pronto = true;
+      console.log(`[start] pronto — encaminhando ${PORTA_EXTERNA} → ${PORTA_INTERNA}`);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  estado = "servidor não respondeu a tempo";
+  console.error("[start] o servidor não abriu a porta interna em 120s");
 }
 
-// O server.js faz `process.chdir(__dirname)` e lê o ambiente de lá; variáveis
-// já definidas aqui continuam valendo.
-await import(pathToFileURL(alvo).href);
+await aguardarServidor();
