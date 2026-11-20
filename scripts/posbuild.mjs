@@ -71,6 +71,13 @@ for (const [origem, alvo] of copias) {
   console.log(`[postbuild] ${path.relative(raiz, origem)} -> ${path.relative(raiz, alvo)}`);
 }
 
+// O `server.js` do pacote delega a `start.mjs`; sem esta cópia o standalone
+// sobe com ERR_MODULE_NOT_FOUND (foi o que quebrou a imagem Docker).
+cpSync(
+  path.join(raiz, "scripts", "start.mjs"),
+  path.join(destino, "start.mjs"),
+);
+
 console.log("[postbuild] pacote pronto em .next/standalone");
 
 /**
