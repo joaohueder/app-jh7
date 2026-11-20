@@ -20,8 +20,31 @@ import { createServer, request } from "node:http";
 import { existsSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const raiz = process.cwd();
+/**
+ * Raiz do runtime.
+ *
+ * `process.cwd()` não serve: no pacote do painel o `npm start` roda em `/app`
+ * enquanto o runtime fica em `/app/app` (se estivesse na raiz, o `npm ci` do
+ * painel apagaria o `node_modules`). Mas no repositório este script vive em
+ * `scripts/` e a raiz é o diretório acima. Escolhe pelo que existe:
+ *
+ * - pasta deste script tem `.next/standalone` ou `server.next.js` → ela é a raiz;
+ * - senão, a pasta acima (caso do `scripts/start.mjs` no repositório).
+ */
+function acharRaiz() {
+  const aqui = path.dirname(fileURLToPath(import.meta.url));
+  const marcas = [".next/standalone/server.next.js", "server.next.js", ".next/BUILD_ID"];
+  if (marcas.some((marca) => existsSync(path.join(aqui, marca)))) return aqui;
+  if (marcas.some((marca) => existsSync(path.join(path.dirname(aqui), marca)))) {
+    return path.dirname(aqui);
+  }
+  return process.cwd();
+}
+
+const raiz = acharRaiz();
+console.log(`[start] runtime em ${raiz}`);
 
 process.env.NODE_ENV ??= "production";
 process.env.HOSTNAME = "0.0.0.0";

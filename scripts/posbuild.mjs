@@ -81,23 +81,66 @@ console.log("[postbuild] pacote pronto em .next/standalone");
  */
 const dist = path.join(raiz, "dist");
 rmSync(dist, { recursive: true, force: true });
-cpSync(destino, dist, { recursive: true });
 
-// O mesmo launcher vai para o espelho: rodando de dentro de `dist`, ele
-// resolve o `server.js` local e força HOSTNAME=0.0.0.0 (o HOSTNAME do Docker é
-// o ID do container e derrubava o servidor com EAI_AGAIN).
-const pkgDist = path.join(dist, "package.json");
+/**
+ * `dist` é a raiz que o painel copia para o runtime (ex.: `/app`) e onde ele
+ * roda `npm ci` e `npm run start`.
+ *
+ * Dois requisitos quebraram o deploy quando `dist` era só o standalone:
+ * - `npm ci` em `/app` → `ENOENT: /app/package.json` (o standalone não tem);
+ * - `npm run start` → precisa do script no package.json da raiz copiada.
+ *
+ * Mas `npm ci` apaga `node_modules` antes de instalar: pôr o runtime na raiz
+ * destruiria o pacote. Então `dist/` fica com um `package.json` mínimo (sem
+ * dependências) e o runtime completo em `dist/app/`, onde o launcher entra.
+ *
+ * Layout final:
+ *   dist/package.json      → scripts.start = node app/start.mjs, sem deps
+ *   dist/app/              → server.js, .next/, node_modules/, drizzle/, ...
+ */
+const runtime = path.join(dist, "app");
+cpSync(destino, runtime, { recursive: true });
+
+const pkgRaiz = JSON.parse(readFileSync(path.join(raiz, "package.json"), "utf8"));
+const embrulho = {
+  name: pkgRaiz.name,
+  version: pkgRaiz.version,
+  private: true,
+  engines: pkgRaiz.engines,
+  scripts: {
+    start: "node app/start.mjs",
+    // `npm ci` exige o script de instalação? Não — mas ferramentas de painel
+    // às vezes chamam `build` por padrão. Um no-op evita falha ruidosa.
+    build: "node -e \"console.log('build já incluído em app/')\"",
+  },
+};
 writeFileSync(
-  path.join(dist, "start.mjs"),
+  path.join(dist, "package.json"),
+  `${JSON.stringify(embrulho, null, 2)}\n`,
+);
+// Sem dependências, o lockfile é trivial e o `npm ci` vira um no-op válido.
+writeFileSync(
+  path.join(dist, "package-lock.json"),
+  `${JSON.stringify(
+    {
+      name: embrulho.name,
+      version: embrulho.version,
+      lockfileVersion: 3,
+      requires: true,
+      packages: {
+        "": { name: embrulho.name, version: embrulho.version },
+      },
+    },
+    null,
+    2,
+  )}\n`,
+);
+writeFileSync(
+  path.join(runtime, "start.mjs"),
   readFileSync(path.join(raiz, "scripts", "start.mjs"), "utf8"),
 );
-if (existsSync(pkgDist)) {
-  const pkg = JSON.parse(readFileSync(pkgDist, "utf8"));
-  pkg.scripts = { ...pkg.scripts, start: "node start.mjs" };
-  writeFileSync(pkgDist, `${JSON.stringify(pkg, null, 2)}\n`);
-}
 
-console.log("[postbuild] espelho do pacote em dist/");
+console.log("[postbuild] dist/ com embrulho npm + runtime em dist/app/");
 
 /**
  * Se o painel servir `dist` como site estático (nginx procurando `index.html`
