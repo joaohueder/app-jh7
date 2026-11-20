@@ -1,0 +1,1 @@
+ALTER TABLE `reports` ADD `data` text DEFAULT '{}' NOT NULL;
